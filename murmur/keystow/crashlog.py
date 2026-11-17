@@ -1,4 +1,4 @@
-"""Persistent crash/error logging to ~/.murmur/logs/murmur.log.
+"""Persistent crash/error logging to ~/.keystow/logs/keystow.log.
 
 Installed once at startup: captures unhandled exceptions (main thread and
 worker threads) plus faulthandler tracebacks, so a silent crash leaves a
@@ -12,12 +12,14 @@ import os
 import sys
 import threading
 
-_LOG_DIR = os.path.join(os.path.expanduser("~"), ".murmur", "logs")
+from . import paths
+
+_LOG_DIR = os.path.join(paths.data_dir(), "logs")
 
 
 def setup() -> str:
     os.makedirs(_LOG_DIR, exist_ok=True)
-    path = os.path.join(_LOG_DIR, "murmur.log")
+    path = os.path.join(_LOG_DIR, "keystow.log")
 
     handler = logging.handlers.RotatingFileHandler(
         path, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
@@ -42,5 +44,5 @@ def setup() -> str:
     sys.excepthook = _excepthook
     threading.excepthook = _thread_hook
 
-    logging.info("Murmur started (log: %s)", path)
+    logging.info("KeyStow started (log: %s)", path)
     return path

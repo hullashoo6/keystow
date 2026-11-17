@@ -23,7 +23,7 @@ jobs:
           pip install -r requirements.txt pyinstaller
       - name: Build Murmur.exe with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name Murmur --collect-all faster_whisper --collect-all ctranslate2 run_murmur.py
+          pyinstaller --noconfirm --onefile --windowed --name Murmur --collect-all faster_whisper --collect-all ctranslate2 run_murmur.py
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer

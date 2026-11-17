@@ -6,7 +6,7 @@ import sys
 import numpy as np
 from faster_whisper import WhisperModel
 
-from . import config
+from . import config, denoise
 
 
 def _resolve_model(model_size: str) -> str:
@@ -44,6 +44,7 @@ class Transcriber:
         """
         if audio.size == 0:
             return ""
+        audio = denoise.denoise_if_enabled(audio)  # strip fan/ground noise first
         segments, _info = self._model.transcribe(
             audio,
             language=self._language,

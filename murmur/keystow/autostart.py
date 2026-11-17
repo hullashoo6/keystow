@@ -3,15 +3,15 @@
 import os
 import sys
 
-_APP_NAME = "Murmur"
+_APP_NAME = "KeyStow"
 
 if sys.platform == "darwin":
-    _PLIST = os.path.expanduser("~/Library/LaunchAgents/com.murmur.app.plist")
+    _PLIST = os.path.expanduser("~/Library/LaunchAgents/com.keystow.app.plist")
     _PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.murmur.app</string>
+  <key>Label</key><string>com.keystow.app</string>
   <key>ProgramArguments</key><array><string>{exe}</string></array>
   <key>RunAtLoad</key><true/>
 </dict>
@@ -35,7 +35,7 @@ elif sys.platform == "win32":
     _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
     def _command() -> str:
-        # PyInstaller onefile: sys.executable is the Murmur.exe path.
+        # PyInstaller onefile: sys.executable is the KeyStow.exe path.
         return f'"{sys.executable}"'
 
     def is_enabled() -> bool:

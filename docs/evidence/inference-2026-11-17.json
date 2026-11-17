@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-17",
+  "environment": {
+    "python": "3.10.12",
+    "platform": "Linux-7.3.4-x86_64-with-glibc2.35",
+    "faster-whisper": "1.2.1",
+    "ctranslate2": "4.9.0"
+  },
+  "model": "Systran/faster-whisper-base",
+  "device": "cpu",
+  "compute_type": "int8",
+  "public_sample": "https://github.com/SYSTRAN/faster-whisper/blob/ed9a06cd/tests/data/jfk.flac",
+  "sample_sha256": "63a4b1e4c1dc655ac70961ffbf518acd249df237e5a0152faae9a4a836949715",
+  "network_check": "HF_HUB_OFFLINE=1 and Python socket.connect denied",
+  "noise_suppression_requested": true,
+  "native_denoise_unavailable": true,
+  "results": [
+    {
+      "case": "speech",
+      "text": "And so my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
+      "elapsed_seconds": 0.793
+    },
+    {
+      "case": "silence",
+      "text": "",
+      "elapsed_seconds": 0.005
+    },
+    {
+      "case": "empty",
+      "text": "",
+      "elapsed_seconds": 0.0
+    }
+  ],
+  "limits": "Fixed public recording on Linux CPU only. Not real microphone, Windows/macOS, packaged app, global hotkey or clipboard verification."
+}

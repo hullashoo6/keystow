@@ -31,7 +31,7 @@ if sys.platform == "darwin":
                 os.remove(_PLIST)
             except FileNotFoundError:
                 pass
-else:
+elif sys.platform == "win32":
     _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
     def _command() -> str:
@@ -61,3 +61,12 @@ else:
                     winreg.DeleteValue(key, _APP_NAME)
                 except FileNotFoundError:
                     pass
+
+
+else:
+
+    def is_enabled() -> bool:
+        return False
+
+    def set_enabled(enabled: bool) -> None:
+        raise OSError("start-at-login is not supported on this platform")

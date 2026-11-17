@@ -1,7 +1,8 @@
-"""Local-only word stats (~/.keystow/stats.json): words dictated, today + all time."""
+"""Local word counts. Invalid files fall back safely; writes are atomic."""
 
 import json
 import os
+import tempfile
 import time
 
 from . import paths
@@ -9,22 +10,43 @@ from . import paths
 _PATH = os.path.join(paths.data_dir(), "stats.json")
 
 
+def _count(value):
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+
 def _read() -> dict:
     try:
         with open(_PATH, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        days = data.get("days", {})
+        return {
+            "total": _count(data.get("total", 0)),
+            "days": {k: _count(v) for k,v in days.items()} if isinstance(days, dict) else {},
+        }
     except (OSError, ValueError):
         return {}
 
 
 def _write(data: dict) -> None:
-    os.makedirs(os.path.dirname(_PATH), exist_ok=True)
-    with open(_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f)
+    directory = os.path.dirname(_PATH)
+    os.makedirs(directory, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory,
+                                         prefix=".stats-", delete=False) as f:
+            temporary = f.name
+            json.dump(data, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, _PATH)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def add_words(count: int) -> None:
-    """Record *count* dictated words under today's date. Local only."""
     if count <= 0:
         return
     data = _read()

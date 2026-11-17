@@ -1,85 +1,72 @@
 # KeyStow
 
-**Speak softly, it's typed.**
+Speak softly, it's typed.
 
-Your voice, typed anywhere. Free and local forever - no subscription, no cloud, no account.
+Local voice typing: focus an editable field, press a key, speak, then press again to request a paste of the transcript. Speech recognition uses faster-whisper on your own machine.
 
-Press a key, speak naturally, press again. Polished text appears wherever your cursor
-is - Chrome, WhatsApp, VS Code, Word, anywhere. Powered by OpenAI's Whisper,
-running entirely on your own machine. Your audio never leaves your device.
+KeyStow is an AI-assisted project under active reliability testing. It is not a verified feature-for-feature Wispr Flow replacement. See the [product vision](docs/PRODUCT_VISION.md) and [living acceptance checklist](docs/CHECKLIST.md) for evidence and open checks.
 
-## Why people switch
+## Price and source
 
-- **No subscription.** Wispr Flow charges monthly. This runs free, forever.
-- **Private by design.** Transcription happens on your device. Nothing is uploaded.
-- **Works everywhere.** If you can click it, you can talk into it.
+The owner-set product price is **$5 one-time, lifetime**. Source code remains available under the [MIT license](LICENSE). This repository does not activate a checkout or change that license. No paid transcription API or app account is required by the current core implementation.
 
-## Setup (Windows, about 5 minutes)
+## Current verification boundary
 
-1. Install Python 3.10+ from [python.org](https://www.python.org/downloads/)
-   (tick **"Add python.exe to PATH"** during setup).
-2. Download this repository: **Code -> Download ZIP**, then unzip it.
-3. Double-click **`install_windows.bat`**.
-4. Double-click **`run_windows.bat`** (or run `python -m keystow`). KeyStow lives in your system tray - press the key, speak, press again to type.
+Windows is the first validation target. A packaged build, an existing download, and a green CI job do not establish that real microphone capture, global shortcuts or insertion work on every machine. macOS packaging is a separate validation track; do not infer Intel Mac support or a tested release from source availability.
 
-The first launch downloads the speech model (~75 MB, one time only). After that
-everything works offline.
+Use the release notes and checklist for the tested commit and actual artifact state. Real OS/device journeys remain required.
 
-## Setup (Mac - Apple Silicon: M1, M2, M3, M4)
+## Windows
 
-1. Download **KeyStowMac.dmg** from the
-   [latest release](https://github.com/hullashoo6/keystow/releases/latest),
-   open it, and drag KeyStow into Applications.
-2. First launch: right-click the app and choose **Open**, then click **Open**
-   again in the dialog. (Or: System Settings -> Privacy & Security ->
-   **Open Anyway**.) KeyStow isn't signed with an Apple certificate yet, so
-   macOS asks for this one-time confirmation - normal for indie apps.
-3. macOS will ask for two permissions, both required:
-   - **Microphone** - so KeyStow can hear you.
-   - **Accessibility** (System Settings -> Privacy & Security -> Accessibility) -
-     so KeyStow can hear your hotkey and type into other apps.
+### Packaged build
 
-The download is for Apple Silicon Macs. Intel Macs aren't covered by the
-installer yet - running from source (Python 3.10+) works there.
+Check the [release](https://github.com/hullashoo6/keystow/releases/latest) for `KeyStowSetup.exe`. Install only an artifact whose source and release you trust. Builds are not code-signed; Windows may warn about an unknown publisher. An unsigned warning is not proof that any download is safe.
 
-## Using it
+The installer build is intended to bundle the **base** speech model so core dictation can run without a first-run model download. This must be verified against the actual downloaded release. Other models require an internet download before local use.
 
-- Press `Right Ctrl` once anywhere and speak. Press it again - your words
-  type themselves into the active app.
-- Change the activation key from the tray menu (Right Ctrl, Caps Lock,
-  Right Shift, Right Alt, or capture a custom key).
-- KeyStow lives in the system tray. Double-click the tray icon to open the
-  window - it shows what it heard and your word counts (today + all time).
-- Turn on **Start with Windows** in the tray menu to keep it always ready.
-- Prefer hold-to-talk? Set `TOGGLE_MODE` in `keystow/config.py`.
-- Bigger model for more accuracy? Pick it from the app's Model dropdown.
+### Run from source
 
-## Privacy: what's stored
+1. Install Python 3.10 or later from [python.org](https://www.python.org/downloads/).
+2. Download or clone this repository.
+3. Run `install_windows.bat`, then `run_windows.bat`, or create a virtual environment, install `requirements.txt`, and run `python -m keystow`.
 
-Everything stays on your machine. KeyStow keeps exactly two small local files
-(in a `.keystow` folder in your user directory):
+Source installs do not include the bundled speech model. First model load normally downloads it; later use depends on the local model cache. Download size and speed depend on the chosen model and connection.
 
-- `settings.json` - your model, hotkey and start-with-Windows preferences.
-- `stats.json` - your word counts (today and all time), for the dashboard.
+## macOS
 
-Your audio is never saved, nothing is uploaded, there is no telemetry,
-and there is no account.
+The workflow targets an Apple Silicon app named `KeyStowMac.dmg`. Confirm that it exists in the release before trying it. Installation, signing/security behavior, microphone and Accessibility permissions, hotkeys, and insertion still require independent real-Mac verification. No Intel Mac installer or compatibility guarantee is offered here.
 
-## Roadmap
+## Use
 
-| Version | What you get |
-|---------|--------------|
-| **V1** (now) | Push-to-talk, offline transcription, automatic typing, clean UI |
-| V2 | AI cleanup: filler-word removal, punctuation, grammar |
-| V3 | Custom vocabulary, writing styles, more languages |
-| V4 | Floating toolbar, settings, transcription history |
-| V5 | Hands-free mode, advanced voice commands |
+- Default: press **Right Ctrl** once to start recording, then press it again to stop and transcribe.
+- Focus the destination field first. Clipboard insertion acts on the app focused when paste is requested. Changing focus during processing can send text to a different field. Secure/elevated fields and some apps may reject paste.
+- Use the tray menu or window to choose an activation key. Avoid keys that conflict with shortcuts you depend on.
+- Close the window to hide it to the tray; choose **Quit KeyStow** in the tray menu to exit.
+- Model loading and transcription can take time on CPU. Larger models need more storage and memory and are not automatically better for every device or utterance.
+- For hold-to-talk, set environment variable `KEYSTOW_TOGGLE=0` before launch. The default is toggle mode.
+- Start-at-login is available in the tray menu. Check its actual setting and installed path after upgrades.
 
-## Tech
+Transcription is fallible. Review text before sending or using it. The app does not independently verify that a destination accepted the paste. Clipboard restoration is text-only and can be affected by other apps; do not rely on it to preserve images, files or rich clipboard formats.
 
-Python + [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (local
-speech-to-text) + PySide6 (UI) + pynput/pyperclip (typing into any app).
+## Local data and network behavior
 
-## License
+Current application code captures audio in memory, performs speech recognition locally, and uses the OS clipboard for insertion. It does not intentionally save recordings, upload audio or send telemetry. Optional model downloads and source dependency installation use the network; this is distinct from cloud transcription.
 
-MIT - see [LICENSE](LICENSE).
+The `.keystow` folder in your user directory holds preferences, word counts, and rotating diagnostic logs. On first use, the code attempts to migrate an existing `.murmur` data folder. Logs may contain error details and local paths; review them before sharing. The transcript stays visible in the current window and temporarily passes through the clipboard.
+
+Noise suppression has a native-library fallback. If the library is unavailable or fails, audio passes through without that suppression. A checked box does not prove suppression ran successfully on a particular platform.
+
+## Checks for contributors
+
+With PySide6 installed:
+
+```sh
+QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
+python -m compileall -q keystow tests
+```
+
+On Windows PowerShell, set `$env:QT_QPA_PLATFORM = 'offscreen'` before running unittest. These checks exercise startup, controller transitions and Qt behavior with substituted peripheral I/O. They do not certify real microphone capture, model accuracy, OS hotkeys, clipboard behavior or an installed release. Follow the checklist for those journeys.
+
+## Near-term work
+
+Prove the default install-to-dictation journey, make failures recoverable, and keep app/page copy consistent with actual behavior. Cloud cleanup, extra modes and new platform claims are deferred until the core is demonstrated.

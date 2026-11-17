@@ -2,7 +2,7 @@
 
 import sys
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -56,6 +56,9 @@ QMainWindow, QWidget {{
     background-color: {CARD};
     border-radius: 14px;
 }}
+QLabel {{
+    background-color: transparent;
+}}
 QLabel#title {{
     font-size: 18px;
     font-weight: 600;
@@ -89,6 +92,14 @@ QComboBox {{
     padding: 6px 10px;
     min-height: 18px;
     color: {TEXT};
+}}
+QComboBox:disabled {{
+    color: {MUTED};
+    border-color: #343447;
+    background-color: #252535;
+}}
+QCheckBox {{
+    background-color: transparent;
 }}
 QComboBox:hover {{
     border-color: {ACCENT};
@@ -184,6 +195,7 @@ class ModelLoader(QThread):
 class MainWindow(QMainWindow):
     """Tray-first app: status, a big talk button, transcript preview, on demand."""
 
+    quit_requested = Signal()
     record_pressed = Signal()
     record_released = Signal()
     record_toggled = Signal()
@@ -192,6 +204,8 @@ class MainWindow(QMainWindow):
     _sig_state = Signal(str, bool, bool)
     _sig_transcript = Signal(str)
     _sig_stats = Signal()
+    _sig_hotkey = Signal(str)
+    _sig_model = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -215,7 +229,7 @@ class MainWindow(QMainWindow):
         title.setObjectName("title")
         layout.addWidget(title)
 
-        self.status = QLabel("Loading the speech model - first run downloads it, once.")
+        self.status = QLabel("Loading the speech model. The base model is bundled with the installer.")
         self.status.setObjectName("status")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -246,6 +260,7 @@ class MainWindow(QMainWindow):
         self.transcript = QLabel("Your words will appear here - and type themselves where your cursor is.")
         self.transcript.setObjectName("transcript")
         self.transcript.setWordWrap(True)
+        self.transcript.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         layout.addWidget(self.transcript)
 
         self.stats_label = QLabel()
@@ -324,6 +339,7 @@ class MainWindow(QMainWindow):
             hotkey_menu.addAction(action)
         custom_action = QAction("Custom key...", self)
         custom_action.triggered.connect(self._hotkey_capture_pick)
+        self._custom_key_action = custom_action
         hotkey_menu.addAction(custom_action)
         self._hotkey_group = group
 
@@ -342,7 +358,7 @@ class MainWindow(QMainWindow):
         menu.addAction(self.autostart_action)
         menu.addSeparator()
         quit_action = QAction("Quit KeyStow", self)
-        quit_action.triggered.connect(QApplication.instance().quit)
+        quit_action.triggered.connect(self.quit_requested.emit)
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._tray_activated)
@@ -353,6 +369,8 @@ class MainWindow(QMainWindow):
         self._sig_state.connect(self._do_set_state)
         self._sig_transcript.connect(self._do_show_transcript)
         self._sig_stats.connect(self._do_refresh_stats)
+        self._sig_hotkey.connect(self._do_set_hotkey_label)
+        self._sig_model.connect(self._do_set_model_selection)
 
     # --- hotkey selection ---
 
@@ -382,7 +400,10 @@ class MainWindow(QMainWindow):
         self.show_and_raise()
 
     def set_hotkey_label(self, name: str):
-        """Called by the controller after a hotkey change (e.g. custom capture)."""
+        """Marshal hotkey-listener updates onto the Qt thread."""
+        self._sig_hotkey.emit(name)
+
+    def _do_set_hotkey_label(self, name: str):
         self._hotkey_name = name
         self._hotkey_label = hotkey_label(name)
         self._update_hint()
@@ -393,9 +414,18 @@ class MainWindow(QMainWindow):
             self.hotkey_box.blockSignals(False)
         for action in self._hotkey_group.actions():
             action.blockSignals(True)
-        # presets only have checkable entries; custom keys leave all unchecked
+        for action in self._hotkey_group.actions():
+            action.setChecked(action.text() == hotkey_label(name))
         for action in self._hotkey_group.actions():
             action.blockSignals(False)
+
+    def set_model_selection(self, name: str):
+        self._sig_model.emit(name)
+
+    def _do_set_model_selection(self, name: str):
+        self.model_box.blockSignals(True)
+        self.model_box.setCurrentText(MODEL_LABELS.get(name, name))
+        self.model_box.blockSignals(False)
 
     def _update_hint(self):
         verb = "press" if self._toggle else "hold"
@@ -433,10 +463,16 @@ class MainWindow(QMainWindow):
     def _do_set_state(self, text: str, recording: bool, busy: bool):
         self.status.setText(text)
         if recording:
-            self.record_btn.setText("Listening...")
+            self.record_btn.setText("Stop and type" if self._toggle else "Release to type")
         else:
             self.record_btn.setText("Click to talk" if self._toggle else "Hold to talk")
         self.record_btn.setEnabled(not busy)
+        editable = not (busy or recording)
+        self.model_box.setEnabled(editable)
+        self.hotkey_box.setEnabled(editable)
+        self.noise_box.setEnabled(editable)
+        self._hotkey_group.setEnabled(editable)
+        self._custom_key_action.setEnabled(editable)
         self.progress.setVisible(busy)
         self.tray.setIcon(self._icon_listening if recording else self._icon_idle)
         self.tray.setToolTip(f"KeyStow - {'listening...' if recording else text}")
@@ -467,5 +503,22 @@ def run_app(controller_factory):
     # entire Qt event loop. Construction alone does not start dictation.
     controller = controller_factory(window)
     controller.start()
+    shutdown_timer = QTimer(window)
+    shutdown_timer.setInterval(100)
+
+    def finish_quit_if_idle():
+        if controller.can_exit():
+            shutdown_timer.stop()
+            app.quit()
+
+    def request_quit():
+        controller.shutdown()
+        window.set_state("Finishing the current task before quitting...", busy=True)
+        shutdown_timer.start()
+        finish_quit_if_idle()
+
+    window.quit_requested.connect(request_quit)
+    shutdown_timer.timeout.connect(finish_quit_if_idle)
+    app.aboutToQuit.connect(controller.wait_for_shutdown)
     window.show()  # first launch shows the window; after that it hides to the tray
     sys.exit(app.exec())

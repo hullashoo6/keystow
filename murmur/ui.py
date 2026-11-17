@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -33,6 +34,10 @@ HOTKEY_PRESETS = [
     ("Right Alt", "alt_r"),
 ]
 CUSTOM_KEY = "__custom__"
+
+MODEL_CHOICES = ["tiny", "base", "small", "medium", "large-v3", "turbo"]
+MODEL_LABELS = {"turbo": "turbo - best accuracy"}
+_MODEL_NAME = {v: k for k, v in MODEL_LABELS.items()}
 
 
 def hotkey_label(name: str) -> str:
@@ -252,9 +257,9 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         row.addWidget(QLabel("Model"))
         self.model_box = QComboBox()
-        self.model_box.addItems(["tiny", "base", "small", "medium", "large-v3"])
-        self.model_box.setCurrentText(config.MODEL_SIZE)
-        self.model_box.setToolTip("Bigger = more accurate, slower. 'base' is a good start.")
+        self.model_box.addItems([MODEL_LABELS.get(m, m) for m in MODEL_CHOICES])
+        self.model_box.setCurrentText(MODEL_LABELS.get(config.MODEL_SIZE, config.MODEL_SIZE))
+        self.model_box.setToolTip("'base' comes built in. 'turbo' is the accuracy pick - downloads once.")
         row.addWidget(self.model_box)
 
         row.addSpacing(12)
@@ -270,6 +275,15 @@ class MainWindow(QMainWindow):
         row.addWidget(self.hotkey_box)
         row.addStretch()
         layout.addLayout(row)
+
+        opts = QHBoxLayout()
+        self.noise_box = QCheckBox("Suppress background noise (fans, hum)")
+        self.noise_box.setChecked(settings.get("noise_suppression", True))
+        self.noise_box.setToolTip("Cleans up mic noise before transcribing. Leave on.")
+        self.noise_box.toggled.connect(lambda on: settings.set("noise_suppression", bool(on)))
+        opts.addWidget(self.noise_box)
+        opts.addStretch()
+        layout.addLayout(opts)
 
         wrapper = QWidget()
         outer = QVBoxLayout(wrapper)
@@ -409,9 +423,9 @@ class MainWindow(QMainWindow):
         event.ignore()
         self.hide()
 
-    def _model_changed(self, name):
+    def _model_changed(self, text):
         if self._on_model_change:
-            self._on_model_change(name)
+            self._on_model_change(_MODEL_NAME.get(text, text))
 
     def set_state(self, text: str, recording: bool = False, busy: bool = False):
         self._sig_state.emit(text, recording, busy)

@@ -1,4 +1,4 @@
-"""Generate murmur.ico (Windows) and murmur.icns (Mac) from the soundwave glyph.
+"""Generate keystow.ico (Windows) and keystow.icns (Mac) from the soundwave glyph.
 
 Run by CI before PyInstaller: python installer/make_icons.py
 """
@@ -40,11 +40,11 @@ def main():
     d.rounded_rectangle([size // 32, size // 32, size - size // 32, size - size // 32],
                         radius=int(size * 0.226), fill=BG)
     img.paste(gradient(size), (0, 0), bars_mask(size))
-    img.save(os.path.join(HERE, "murmur.ico"),
+    img.save(os.path.join(HERE, "keystow.ico"),
              sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    img.save(os.path.join(HERE, "murmur.icns"),
+    img.save(os.path.join(HERE, "keystow.icns"),
              sizes=[(16, 16), (32, 32), (64, 64), (128, 128), (256, 256), (512, 512), (1024, 1024)])
-    print("wrote murmur.ico + murmur.icns")
+    print("wrote keystow.ico + keystow.icns")
 
 
 if __name__ == "__main__":

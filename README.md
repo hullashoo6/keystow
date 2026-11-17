@@ -1,6 +1,8 @@
-# Wispr Flow Alternative
+# Murmur
 
-**Your voice, typed anywhere. Free and local forever - no subscription, no cloud, no account.**
+**Speak softly, it's typed.**
+
+Your voice, typed anywhere. Free and local forever - no subscription, no cloud, no account.
 
 Hold a key, speak naturally, release. Polished text appears wherever your cursor
 is - Chrome, WhatsApp, VS Code, Word, anywhere. Powered by OpenAI's Whisper,

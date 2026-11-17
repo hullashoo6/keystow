@@ -3,7 +3,7 @@ name: Build Windows installer
 on:
   push:
     branches: [main]
-    paths: ['run_murmur.py', 'murmur/**', 'requirements.txt', 'installer/**', '.github/workflows/build.yml']
+    paths: ['run_keystow.py', 'keystow/**', 'requirements.txt', 'installer/**', '.github/workflows/build.yml']
   workflow_dispatch:
 
 permissions:
@@ -27,14 +27,14 @@ jobs:
         run: |
           pip download pyrnnoise==0.4.5 --no-deps --platform win_amd64 --python-version 3.11 --only-binary :all: -d vendor_dl
           python -c "import zipfile,glob; z=zipfile.ZipFile(glob.glob('vendor_dl/*.whl')[0]); z.extract('pyrnnoise-0.4.5.data/purelib/pyrnnoise/rnnoise.dll','vendor_dl')"
-          copy vendor_dl\pyrnnoise-0.4.5.data\purelib\pyrnnoise\rnnoise.dll murmur\vendor\rnnoise.dll
+          copy vendor_dl\pyrnnoise-0.4.5.data\purelib\pyrnnoise\rnnoise.dll keystow\vendor\rnnoise.dll
       - name: Download bundled Whisper base model
         run: |
           pip install huggingface-hub
           huggingface-cli download Systran/faster-whisper-base --local-dir models/faster-whisper-base
-      - name: Build Murmur.exe with PyInstaller
+      - name: Build KeyStow.exe with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name Murmur --icon installer\murmur.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "murmur/vendor/rnnoise.dll;murmur/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_murmur.py
+          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer\keystow.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer
@@ -43,7 +43,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v1.0.0 installer\installer\MurmurSetup.exe --clobber || gh release create v1.0.0 installer\installer\MurmurSetup.exe --title "Murmur v1.0.0" --notes "First release: push-to-talk voice typing for Windows. Download MurmurSetup.exe, run it, and Murmur appears in your tray. Hold Right Ctrl, speak, release."
+          gh release upload v1.0.0 installer\installer\KeyStowSetup.exe --clobber || gh release create v1.0.0 installer\installer\KeyStowSetup.exe --title "KeyStow v1.0.0" --notes "Private push-to-talk voice typing for Windows. Download KeyStowSetup.exe, run it, and KeyStow appears in your tray. Press Right Ctrl, speak, press again - it types."
 
   build-mac:
     runs-on: macos-latest
@@ -62,16 +62,16 @@ jobs:
         run: |
           pip install huggingface-hub
           huggingface-cli download Systran/faster-whisper-base --local-dir models/faster-whisper-base
-      - name: Build Murmur.app with PyInstaller
+      - name: Build KeyStow.app with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name Murmur --icon installer/murmur.icns --add-data "models/faster-whisper-base:models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_murmur.py
+          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data "models/faster-whisper-base:models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
       - name: Create DMG
         run: |
           mkdir -p dist/dmg
-          cp -R dist/Murmur.app dist/dmg/
-          hdiutil create -volname Murmur -srcfolder dist/dmg -ov -format UDZO dist/MurmurMac.dmg
+          cp -R dist/KeyStow.app dist/dmg/
+          hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v1.0.0 dist/MurmurMac.dmg --clobber || gh release create v1.0.0 dist/MurmurMac.dmg --title "Murmur v1.0.0" --notes "Voice typing for Windows and Mac: local, private, no account. Windows: run MurmurSetup.exe. Mac (Apple Silicon): open MurmurMac.dmg, drag to Applications, right-click -> Open on first launch, then allow Microphone and Accessibility access."
+          gh release upload v1.0.0 dist/KeyStowMac.dmg --clobber || gh release create v1.0.0 dist/KeyStowMac.dmg --title "KeyStow v1.0.0" --notes "Private voice typing for Windows and Mac: local, offline, no account. Windows: run KeyStowSetup.exe. Mac (Apple Silicon): open KeyStowMac.dmg, drag to Applications, right-click -> Open on first launch, then allow Microphone and Accessibility access."

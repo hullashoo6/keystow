@@ -1,4 +1,4 @@
-"""Minimal floating UI for Wispr Flow Alternative (PySide6)."""
+"""Minimal floating UI for Murmur (PySide6)."""
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
@@ -105,7 +105,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Wispr Flow Alternative")
+        self.setWindowTitle("Murmur")
         self.setMinimumWidth(360)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(24, 20, 24, 24)
         layout.setSpacing(12)
 
-        title = QLabel("Wispr Flow Alternative")
+        title = QLabel("Murmur")
         title.setObjectName("title")
         layout.addWidget(title)
 

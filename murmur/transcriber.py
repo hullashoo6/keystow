@@ -1,9 +1,22 @@
 """Offline speech-to-text with faster-whisper."""
 
+import os
+import sys
+
 import numpy as np
 from faster_whisper import WhisperModel
 
 from . import config
+
+
+def _resolve_model(model_size: str) -> str:
+    """Use the Whisper model bundled in the installer when available."""
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        bundled = os.path.join(base, "models", f"faster-whisper-{model_size}")
+        if os.path.isdir(bundled):
+            return bundled
+    return model_size
 
 
 class Transcriber:
@@ -16,8 +29,9 @@ class Transcriber:
         compute_type: str = config.COMPUTE_TYPE,
         language: str | None = config.LANGUAGE,
     ):
-        print(f"Loading Whisper model '{model_size}' on {device} (first run downloads it)...")
-        self._model = WhisperModel(model_size, device=device, compute_type=compute_type)
+        source = _resolve_model(model_size)
+        print(f"Loading Whisper model '{source}' on {device} (downloads once if not bundled)...")
+        self._model = WhisperModel(source, device=device, compute_type=compute_type)
         self._language = language
 
     def transcribe(self, audio: np.ndarray) -> str:

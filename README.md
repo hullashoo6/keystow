@@ -4,7 +4,7 @@
 
 Your voice, typed anywhere. Free and local forever - no subscription, no cloud, no account.
 
-Hold a key, speak naturally, release. Polished text appears wherever your cursor
+Press a key, speak naturally, press again. Polished text appears wherever your cursor
 is - Chrome, WhatsApp, VS Code, Word, anywhere. Powered by OpenAI's Whisper,
 running entirely on your own machine. Your audio never leaves your device.
 
@@ -20,21 +20,33 @@ running entirely on your own machine. Your audio never leaves your device.
    (tick **"Add python.exe to PATH"** during setup).
 2. Download this repository: **Code -> Download ZIP**, then unzip it.
 3. Double-click **`install_windows.bat`**.
-4. Double-click **`run_windows.bat`** (or run `python -m murmur`).
+4. Double-click **`run_windows.bat`** (or run `python -m murmur`). Murmur lives in your system tray - press the key, speak, press again to type.
 
 The first launch downloads the speech model (~75 MB, one time only). After that
 everything works offline.
 
 ## Using it
 
-- **Hold** `Right Ctrl` anywhere and speak. **Release** - your words type
-  themselves into the active app.
-- Or press the big **Hold to talk** button in the app window.
-- The window shows what it heard, so you always know what was typed.
-- Press `Esc` to quit.
+- Press `Right Ctrl` once anywhere and speak. Press it again - your words
+  type themselves into the active app.
+- Change the activation key from the tray menu (Right Ctrl, Caps Lock,
+  Right Shift, Right Alt, or capture a custom key).
+- Murmur lives in the system tray. Double-click the tray icon to open the
+  window - it shows what it heard and your word counts (today + all time).
+- Turn on **Start with Windows** in the tray menu to keep it always ready.
+- Prefer hold-to-talk? Set `TOGGLE_MODE` in `murmur/config.py`.
+- Bigger model for more accuracy? Pick it from the app's Model dropdown.
 
-Want a different hotkey or a smarter (bigger) model? Change the model in the
-app's dropdown, or set `WISPR_HOTKEY` / `WISPR_MODEL` in `murmur/config.py`.
+## Privacy: what's stored
+
+Everything stays on your machine. Murmur keeps exactly two small local files
+(in a `.murmur` folder in your user directory):
+
+- `settings.json` - your model, hotkey and start-with-Windows preferences.
+- `stats.json` - your word counts (today and all time), for the dashboard.
+
+Your audio is never saved, nothing is uploaded, there is no telemetry,
+and there is no account.
 
 ## Roadmap
 

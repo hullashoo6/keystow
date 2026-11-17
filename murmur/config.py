@@ -15,8 +15,10 @@ COMPUTE_TYPE = os.environ.get("WISPR_COMPUTE_TYPE", "int8")
 # Transcription language (None = auto-detect).
 LANGUAGE = os.environ.get("WISPR_LANGUAGE", "en")
 
-# Push-to-talk hotkey (pynput key name). Hold to record, release to type.
+# Hotkey (pynput key name). Default: toggle - press once to start listening,
+# press again to type. Set WISPR_TOGGLE=0 for hold-to-talk instead.
 HOTKEY = os.environ.get("WISPR_HOTKEY", "ctrl_r")
+TOGGLE_MODE = os.environ.get("WISPR_TOGGLE", "1") != "0"
 
 # Audio capture settings. 16 kHz mono is what Whisper expects.
 SAMPLE_RATE = 16000

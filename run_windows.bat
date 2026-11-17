@@ -1,4 +1,4 @@
 @echo off
-REM Wispr Flow Alternative - launch
+REM Murmur - launch
 call .venv\Scripts\activate
 python -m wisprflow

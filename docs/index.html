@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KeyStow - Speak softly, it's typed.</title>
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAACD0lEQVR4nO1bS1bCQBDs8DyBK0/g83c6BqKAgIKAouF0Aj5P4MorxAVOXtIkMAOdNJnpWjGEhKpKVzNJBgCB3wgO2en84jKmJkKF359vK03GHz5l0UUwMaNhcqA6igcw473ToboKz0NRNRRWgEviAYr15BrgmniNPF1GPcBlbBng6tnXwPoauza6irROiQA3AW4kBvhS/hpa7xkniaFaAcBmNvYU3bBwYIvA4F+8xjMaVwXpAdwEuFFJD+ipNQDEEADAi0HWx2qVfP4xui2VW+kV0FXrzLi/J+sjtH2iluSc0vA+At4bQNoDQrWGADa/66/RNeWhAQBgppbJHZwHot5AVgEhynoHjY/FFPWCN6Le4H0EvDfgoB7QTGX9o4Ss2+I96Q0xtKI7q32tK6CpvjLjFnHWbTFHvSBSn1b7ex8BMYCbADfEAG4C3BADuAlwQwzgJsANawMW0VVmzD0VDtFlsbKcCh90LbA4gfl/Gu0j7g1IBLgJcEMMoDrQHPWFGXGf6KKc3xPdEyS9KYpNoEanhIckEgFuAtwo3YApisV4z7PBAdreK/nZYCUPRyeWvaFf4WIJiQDXF4/QWR4yLZFJFhD7tkgKYLOAWiKgX9j+06Lu0HqlArgJcCNjgC8xSOvcqgDXTcD6JAJ5b7paBXm6CivANROK9BiJrPMscd+JNOoBda0GE97e/3fYe/wB8v+R1DZwVsMAAAAASUVORK5CYII=">
-<meta name="description" content="KeyStow is private, offline voice typing for Windows and Mac. Press a key, speak, press again - polished text appears wherever your cursor is. Pay once, own it forever.">
+<meta name="description" content="KeyStow is a local voice-typing project for everyday dictation. $5 lifetime product price; MIT source. Windows-first reliability testing is in progress.">
 <style>
   :root { --bg:#0b0e14; --panel:#121826; --text:#e8ecf4; --muted:#9aa4b8; --accent:#7c8cff; --accent2:#a78bfa; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -39,19 +39,19 @@
     <header><div class="logo">keystow<span>.</span></div></header>
     <section class="hero">
       <h1>Speak softly,<br><span>it's typed.</span></h1>
-      <p>KeyStow turns your voice into text, anywhere on your computer. Press a key, speak naturally, press again - polished words appear right where your cursor is.</p>
-      <div class="ctas"><a class="cta" href="https://github.com/hullashoo6/keystow/releases/latest/download/KeyStowSetup.exe">Install for Windows</a><a class="cta secondary" href="https://github.com/hullashoo6/keystow/releases/latest/download/KeyStowMac.dmg">Install for Mac (Apple Silicon)</a></div>
-      <p class="note">Free &amp; open source &middot; Pay once if you love it &middot; No account needed</p>
-      <p class="note" style="margin-top:8px">First install? Windows may show a blue "Windows protected your PC" screen - that's normal for new apps. Click <b>More info</b>, then <b>Run anyway</b>.</p>
-      <p class="note" style="margin-top:8px">On Mac (Apple Silicon): open the dmg, drag KeyStow to Applications, then right-click the app and choose <b>Open</b> -&gt; <b>Open</b> the first time (a normal one-time step for indie apps). Allow <b>Microphone</b> and <b>Accessibility</b> access when macOS asks.</p>
+      <p>Local voice typing for everyday work. Focus a text field, press a key, speak, then press again to transcribe on your computer.</p>
+      <div class="ctas"><a class="cta" href="https://github.com/hullashoo6/keystow/releases/latest">Check Windows release</a><a class="cta secondary" href="https://github.com/hullashoo6/keystow">Read the source</a></div>
+      <p class="note">$5 one-time, lifetime product price &middot; MIT source &middot; No app account required</p>
+      <p class="note">Reliability testing in progress. A download or successful build is not a guarantee of working dictation on your machine. Review the release notes before installing.</p>
+      <p class="note">Windows first. macOS packaging and real-device verification are a separate track; check the release for actual available assets. Unsigned builds may trigger security warnings. Only install downloads you trust.</p>
     </section>
     <section class="steps">
-      <div class="card"><div class="n">01</div><h3>Install in one click</h3><p>Download the installer, run it, and KeyStow sits quietly in your tray. No Python, no setup wizard maze.</p></div>
-      <div class="card"><div class="n">02</div><h3>Press and talk</h3><p>Press Right Ctrl once, say what you mean, press again. In email, chat, docs - anywhere you can type, you can now speak.</p></div>
-      <div class="card"><div class="n">03</div><h3>Stay private</h3><p>Transcription runs entirely on your own machine. Your voice never leaves your device. No cloud, no subscription.</p></div>
+      <div class="card"><div class="n">01</div><h3>Start with the base model</h3><p>The installer is intended to include a local base model. Source installs and optional models need a download. Check the tested release and setup instructions.</p></div>
+      <div class="card"><div class="n">02</div><h3>Focus, press, speak</h3><p>Press Right Ctrl to record, then press again to stop. Keep your destination field focused while it processes. Review the transcript before sending.</p></div>
+      <div class="card"><div class="n">03</div><h3>Understand the limits</h3><p>Recognition can make mistakes. Paste may be blocked by some apps or secure fields. Real microphone, shortcut and insertion checks are tracked separately from builds.</p></div>
     </section>
-    <p class="privacy">Powered by OpenAI's Whisper, running 100% locally. No audio is ever saved or uploaded - no cloud, no account, no telemetry. The only things stored on your computer are your settings and your word counts.</p>
-    <footer>Source code on <a href="https://github.com/hullashoo6/keystow">GitHub</a> &middot; MIT licensed</footer>
+    <p class="privacy">Speech recognition runs locally with faster-whisper. Current app code does not intentionally save recordings, upload audio or send telemetry. Model downloads use the network. Settings, word counts and diagnostic logs stay in your user folder; text passes through your clipboard.</p>
+    <footer>Setup, evidence and source on <a href="https://github.com/hullashoo6/keystow">GitHub</a> &middot; MIT licensed</footer>
   </div>
 </body>
 </html>

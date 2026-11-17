@@ -1,4 +1,4 @@
-"""Murmur voice typing controller: toggle (or hold) hotkey -> transcribe -> type."""
+"""KeyStow voice typing controller: toggle (or hold) hotkey -> transcribe -> type."""
 
 import threading
 

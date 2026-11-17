@@ -255,6 +255,13 @@ class MainWindow(QMainWindow):
         label = "Start at login" if sys.platform == "darwin" else "Start with Windows"
         self.autostart_action = QAction(label, self)
         self.autostart_action.setCheckable(True)
+        if not settings.get("autostart_initialized"):
+            # First run: default to starting at login so Murmur is always there.
+            try:
+                autostart.set_enabled(True)
+            except OSError:
+                pass
+            settings.set("autostart_initialized", True)
         self.autostart_action.setChecked(autostart.is_enabled())
         self.autostart_action.triggered.connect(self._toggle_autostart)
         menu.addAction(self.autostart_action)

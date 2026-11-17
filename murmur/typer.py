@@ -1,5 +1,6 @@
 """Type text into whatever application currently has focus."""
 
+import sys
 import time
 
 import pyperclip
@@ -25,10 +26,11 @@ def type_text(text: str, restore_clipboard: bool = True) -> None:
     pyperclip.copy(text)
     keyboard = Controller()
     time.sleep(0.05)  # let the clipboard settle
-    keyboard.press(Key.ctrl)
+    modifier = Key.cmd if sys.platform == "darwin" else Key.ctrl
+    keyboard.press(modifier)
     keyboard.press("v")
     keyboard.release("v")
-    keyboard.release(Key.ctrl)
+    keyboard.release(modifier)
     time.sleep(0.05)
 
     if previous is not None:

@@ -5,5 +5,5 @@ call .venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 echo.
-echo Done! Run the app with:  python -m wisprflow
+echo Done! Run the app with:  python -m murmur
 pause

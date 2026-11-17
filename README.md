@@ -20,7 +20,7 @@ running entirely on your own machine. Your audio never leaves your device.
    (tick **"Add python.exe to PATH"** during setup).
 2. Download this repository: **Code -> Download ZIP**, then unzip it.
 3. Double-click **`install_windows.bat`**.
-4. Double-click **`run_windows.bat`** (or run `python -m wisprflow`).
+4. Double-click **`run_windows.bat`** (or run `python -m murmur`).
 
 The first launch downloads the speech model (~75 MB, one time only). After that
 everything works offline.
@@ -34,7 +34,7 @@ everything works offline.
 - Press `Esc` to quit.
 
 Want a different hotkey or a smarter (bigger) model? Change the model in the
-app's dropdown, or set `WISPR_HOTKEY` / `WISPR_MODEL` in `wisprflow/config.py`.
+app's dropdown, or set `WISPR_HOTKEY` / `WISPR_MODEL` in `murmur/config.py`.
 
 ## Roadmap
 

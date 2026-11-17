@@ -25,6 +25,23 @@ running entirely on your own machine. Your audio never leaves your device.
 The first launch downloads the speech model (~75 MB, one time only). After that
 everything works offline.
 
+## Setup (Mac - Apple Silicon: M1, M2, M3, M4)
+
+1. Download **MurmurMac.dmg** from the
+   [latest release](https://github.com/hullashoo6/murmur/releases/latest),
+   open it, and drag Murmur into Applications.
+2. First launch: right-click the app and choose **Open**, then click **Open**
+   again in the dialog. (Or: System Settings -> Privacy & Security ->
+   **Open Anyway**.) Murmur isn't signed with an Apple certificate yet, so
+   macOS asks for this one-time confirmation - normal for indie apps.
+3. macOS will ask for two permissions, both required:
+   - **Microphone** - so Murmur can hear you.
+   - **Accessibility** (System Settings -> Privacy & Security -> Accessibility) -
+     so Murmur can hear your hotkey and type into other apps.
+
+The download is for Apple Silicon Macs. Intel Macs aren't covered by the
+installer yet - running from source (Python 3.10+) works there.
+
 ## Using it
 
 - Press `Right Ctrl` once anywhere and speak. Press it again - your words

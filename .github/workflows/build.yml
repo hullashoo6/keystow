@@ -23,13 +23,18 @@ jobs:
           pip install -r requirements.txt pyinstaller pillow
       - name: Generate app icons
         run: python installer/make_icons.py
+      - name: Fetch RNNoise native library
+        run: |
+          pip download pyrnnoise==0.4.5 --no-deps --platform win_amd64 --python-version 3.11 --only-binary :all: -d vendor_dl
+          python -c "import zipfile,glob; z=zipfile.ZipFile(glob.glob('vendor_dl/*.whl')[0]); z.extract('pyrnnoise-0.4.5.data/purelib/pyrnnoise/rnnoise.dll','vendor_dl')"
+          copy vendor_dl\pyrnnoise-0.4.5.data\purelib\pyrnnoise\rnnoise.dll murmur\vendor\rnnoise.dll
       - name: Download bundled Whisper base model
         run: |
           pip install huggingface-hub
           huggingface-cli download Systran/faster-whisper-base --local-dir models/faster-whisper-base
       - name: Build Murmur.exe with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name Murmur --icon installer\murmur.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_murmur.py
+          pyinstaller --noconfirm --onefile --windowed --name Murmur --icon installer\murmur.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "murmur/vendor/rnnoise.dll;murmur/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_murmur.py
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer

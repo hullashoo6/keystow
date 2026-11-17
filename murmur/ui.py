@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import autostart, config, settings, stats
+from . import autostart, config, settings, stats, tray_icons
 
 ACCENT = "#6C5CE7"
 BG = "#1E1E2E"
@@ -141,6 +141,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Murmur")
+        self.setWindowIcon(tray_icons.icon("app", fallback=lambda: _tray_icon(ACCENT)))
         self.setMinimumWidth(360)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
@@ -229,8 +230,8 @@ class MainWindow(QMainWindow):
         self._on_model_change = None
 
         # --- system tray ---
-        self._icon_idle = _tray_icon("#8a8aa0")
-        self._icon_listening = _tray_icon(ACCENT)
+        self._icon_idle = tray_icons.icon("idle", fallback=lambda: _tray_icon("#8a8aa0"))
+        self._icon_listening = tray_icons.icon("listening", fallback=lambda: _tray_icon(ACCENT))
         self.tray = QSystemTrayIcon(self._icon_idle, self)
         self.tray.setToolTip("Murmur")
         menu = QMenu()

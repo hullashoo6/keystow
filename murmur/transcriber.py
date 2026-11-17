@@ -21,13 +21,34 @@ class Transcriber:
         self._language = language
 
     def transcribe(self, audio: np.ndarray) -> str:
-        """Return the transcribed text for a float32 mono audio buffer."""
+        """Return the transcribed text for a float32 mono audio buffer.
+
+        Every utterance is transcribed independently: no context from previous
+        dictations (which snowballs one mistake into garbage), VAD filters
+        silence/background noise, and low-confidence segments are dropped
+        instead of typed.
+        """
         if audio.size == 0:
             return ""
         segments, _info = self._model.transcribe(
             audio,
             language=self._language,
             beam_size=5,
-            vad_filter=True,  # skip silence so pauses don't confuse the model
+            condition_on_previous_text=False,  # each dictation stands alone
+            vad_filter=True,  # skip silence so pauses/noise don't confuse the model
+            vad_parameters={"min_silence_duration_ms": 500},
         )
-        return " ".join(segment.text.strip() for segment in segments).strip()
+        kept = []
+        for segment in segments:
+            text = segment.text.strip()
+            if not text:
+                continue
+            # Hallucination guards: drop noise-as-speech and degenerate output.
+            if segment.no_speech_prob > 0.6:
+                continue
+            if segment.compression_ratio > 2.4:
+                continue
+            if segment.avg_logprob < -1.0:
+                continue
+            kept.append(text)
+        return " ".join(kept).strip()

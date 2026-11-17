@@ -83,3 +83,11 @@ Update checked boxes and this log only after the evidence exists. A failed check
 - Real Qt listening/processing/error pixels inspected after changes: clear Stop and type action, transparent labels, active-state controls disabled, selectable recovery transcript, error points below. Rendered states were injected; this is not real microphone evidence.
 - Remaining observed claims defects: README free-forever/works-everywhere/two-files copy and unverified Intel-Mac claim; page polished-anywhere claim and Mac download before confirmed asset. Corrections remain open.
 - Local environment: Python 3.10.12, PySide6 6.8.3, Linux offscreen. Checks: `QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v`; `python -m compileall -q keystow tests`. Actual audio, OS keyboard, clipboard and installed-release journeys remain OPEN.
+
+## Additional evidence after the first follow-up bundle
+
+- Real `Transcriber`, faster-whisper 1.2.1 / CTranslate2 4.9.0, CPU int8 base, Python 3.10.12 on Linux: public upstream JFK sample transcribed to the upstream expected sentence. Silence/empty produced no text. Repeated with `HF_HUB_OFFLINE=1` and Python socket connection denied, explicit local model directory. Missing RNNoise library fell back correctly with suppression requested. This does not establish target-device latency, accuracy across speakers, actual mic capture or packaged offline startup. See `docs/evidence/inference-2026-11-17.json`.
+- Real temporary filesystem: old-data migration, existing-destination preservation and copy fallback passed. Valid JSON arrays reproduced settings/stats startup crashes; type validation and atomic same-directory writes fixed locally. Injected replacement failure retains the last-good file and cleans temporary files. Installed upgrades remain OPEN.
+- Real recorder logic with controlled stream: start failure closes the partly initialized stream; stop failure closes it; audio frames are cleared after delivery/failure; immediate retry succeeds. These are stream-ownership component checks, not PortAudio hardware evidence.
+- README/page corrections rendered in Chrome at desktop and 390px mobile. No overflow/crop found. These are local previews, not proof of deployed page state.
+- Public writing is serialized behind the startup installer run; local patches/checks are not automatically public or shipped.

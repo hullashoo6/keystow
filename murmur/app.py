@@ -4,7 +4,7 @@ import threading
 
 from pynput import keyboard
 
-from . import config, settings, stats
+from . import config, crashlog, settings, stats
 from .recorder import PushToTalkRecorder
 from .transcriber import Transcriber
 from .typer import type_text
@@ -121,33 +121,56 @@ class VoiceController:
         return char or str(key)
 
     def _on_press(self, key):
-        if self._capturing:
-            self._capturing = False
-            self.set_hotkey(self._key_name(key))
-            return
-        if key != self._hotkey:
-            return
-        if self._toggle:
-            if not self._hotkey_down:
-                self._hotkey_down = True
-                self.toggle_recording()
-        else:
-            self.start_recording()
+        # Runs on the keyboard-listener thread: never let an exception kill it.
+        try:
+            if self._capturing:
+                self._capturing = False
+                self.set_hotkey(self._key_name(key))
+                return
+            if key != self._hotkey:
+                return
+            if self._toggle:
+                if not self._hotkey_down:
+                    self._hotkey_down = True
+                    self.toggle_recording()
+            else:
+                self.start_recording()
+        except Exception:
+            import logging
+
+            logging.exception("hotkey press handler failed")
 
     def _on_release(self, key):
-        if key != self._hotkey:
-            return
-        self._hotkey_down = False
-        if not self._toggle:
-            self.stop_recording()
+        try:
+            if key != self._hotkey:
+                return
+            self._hotkey_down = False
+            if not self._toggle:
+                self.stop_recording()
+        except Exception:
+            import logging
+
+            logging.exception("hotkey release handler failed")
 
     def _transcribe_and_type(self, audio):
-        text = self.transcriber.transcribe(audio) if self.transcriber else ""
+        import logging
+
+        try:
+            text = self.transcriber.transcribe(audio) if self.transcriber else ""
+        except Exception as exc:
+            logging.exception("transcription failed")
+            self.window.set_state(f"Transcription failed: {exc}", busy=False)
+            return
         if text:
             stats.add_words(len(text.split()))
             self.window.show_transcript(text)
             self.window.refresh_stats()
-            type_text(text)
+            try:
+                type_text(text)
+            except Exception:
+                logging.exception("typing failed")
+                self.window.set_state("Couldn't type into the other app - text is above, copy it.")
+                return
             if self._toggle:
                 self.window.set_state(f"Typed. Press [{self._label}] to speak again.")
             else:
@@ -157,4 +180,5 @@ class VoiceController:
 
 
 def main() -> None:
+    crashlog.setup()
     run_app(VoiceController)

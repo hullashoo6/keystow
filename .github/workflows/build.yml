@@ -31,7 +31,7 @@ jobs:
       - name: Download bundled Whisper base model
         run: |
           pip install huggingface-hub
-          huggingface-cli download Systran/faster-whisper-base --local-dir models/faster-whisper-base
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base', local_dir='models/faster-whisper-base')"
       - name: Build KeyStow.exe with PyInstaller
         run: |
           pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer\keystow.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
@@ -61,7 +61,7 @@ jobs:
       - name: Download bundled Whisper base model
         run: |
           pip install huggingface-hub
-          huggingface-cli download Systran/faster-whisper-base --local-dir models/faster-whisper-base
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base', local_dir='models/faster-whisper-base')"
       - name: Build KeyStow.app with PyInstaller
         run: |
           pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data "models/faster-whisper-base:models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py

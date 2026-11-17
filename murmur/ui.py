@@ -1,5 +1,7 @@
 """Murmur UI: lives in the system tray, with a small window on demand (PySide6)."""
 
+import sys
+
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
@@ -250,7 +252,8 @@ class MainWindow(QMainWindow):
         hotkey_menu.addAction(custom_action)
         self._hotkey_group = group
 
-        self.autostart_action = QAction("Start with Windows", self)
+        label = "Start at login" if sys.platform == "darwin" else "Start with Windows"
+        self.autostart_action = QAction(label, self)
         self.autostart_action.setCheckable(True)
         self.autostart_action.setChecked(autostart.is_enabled())
         self.autostart_action.triggered.connect(self._toggle_autostart)

@@ -184,6 +184,9 @@ class MainWindow(QMainWindow):
     record_toggled = Signal()
     hotkey_selected = Signal(str)
     hotkey_capture_requested = Signal()
+    _sig_state = Signal(str, bool, bool)
+    _sig_transcript = Signal(str)
+    _sig_stats = Signal()
 
     def __init__(self):
         super().__init__()
@@ -243,7 +246,7 @@ class MainWindow(QMainWindow):
         self.stats_label = QLabel()
         self.stats_label.setObjectName("status")
         self.stats_label.setAlignment(Qt.AlignCenter)
-        self.refresh_stats()
+        self._do_refresh_stats()
         layout.addWidget(self.stats_label)
 
         row = QHBoxLayout()
@@ -331,6 +334,12 @@ class MainWindow(QMainWindow):
         self.tray.activated.connect(self._tray_activated)
         self.tray.show()
 
+        # Worker threads (hotkey listener, transcription) must not touch
+        # widgets directly - these queued signals marshal to the GUI thread.
+        self._sig_state.connect(self._do_set_state)
+        self._sig_transcript.connect(self._do_show_transcript)
+        self._sig_stats.connect(self._do_refresh_stats)
+
     # --- hotkey selection ---
 
     def _hotkey_combo_changed(self, index):
@@ -405,6 +414,9 @@ class MainWindow(QMainWindow):
             self._on_model_change(name)
 
     def set_state(self, text: str, recording: bool = False, busy: bool = False):
+        self._sig_state.emit(text, recording, busy)
+
+    def _do_set_state(self, text: str, recording: bool, busy: bool):
         self.status.setText(text)
         if recording:
             self.record_btn.setText("Listening...")
@@ -416,9 +428,15 @@ class MainWindow(QMainWindow):
         self.tray.setToolTip(f"Murmur - {'listening...' if recording else text}")
 
     def show_transcript(self, text: str):
+        self._sig_transcript.emit(text)
+
+    def _do_show_transcript(self, text: str):
         self.transcript.setText(text)
 
     def refresh_stats(self):
+        self._sig_stats.emit()
+
+    def _do_refresh_stats(self):
         self.stats_label.setText(
             f"Words dictated - today: {stats.today():,}  |  all time: {stats.total():,}"
         )

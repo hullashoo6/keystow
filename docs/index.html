@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Murmur - Speak softly, it's typed.</title>
-<meta name="description" content="Murmur is private, offline voice typing for Windows. Hold a key, speak, release - polished text appears wherever your cursor is. Pay once, own it forever.">
+<meta name="description" content="Murmur is private, offline voice typing for Windows and Mac. Press a key, speak, press again - polished text appears wherever your cursor is. Pay once, own it forever.">
 <style>
   :root { --bg:#0b0e14; --panel:#121826; --text:#e8ecf4; --muted:#9aa4b8; --accent:#7c8cff; --accent2:#a78bfa; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -17,6 +17,8 @@
   .hero h1 { font-size:52px; letter-spacing:-2px; line-height:1.1; }
   .hero h1 span { background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
   .hero p { color:var(--muted); font-size:19px; max-width:560px; margin:18px auto 0; }
+  .ctas { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+  .cta.secondary { background:transparent; border:1px solid var(--accent); box-shadow:none; }
   .cta { display:inline-block; margin-top:34px; background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#fff; font-size:18px; font-weight:600; padding:16px 42px; border-radius:12px; text-decoration:none; box-shadow:0 8px 30px rgba(124,140,255,.35); }
   .cta:hover { transform:translateY(-1px); }
   .note { color:var(--muted); font-size:13px; margin-top:14px; }
@@ -36,17 +38,18 @@
     <header><div class="logo">murmur<span>.</span></div></header>
     <section class="hero">
       <h1>Speak softly,<br><span>it's typed.</span></h1>
-      <p>Murmur turns your voice into text, anywhere on Windows. Hold a key, speak naturally, release - polished words appear right where your cursor is.</p>
-      <a class="cta" href="https://github.com/hullashoo6/murmur/releases/latest/download/MurmurSetup.exe">Install for Windows</a>
+      <p>Murmur turns your voice into text, anywhere on your computer. Press a key, speak naturally, press again - polished words appear right where your cursor is.</p>
+      <div class="ctas"><a class="cta" href="https://github.com/hullashoo6/murmur/releases/latest/download/MurmurSetup.exe">Install for Windows</a><a class="cta secondary" href="https://github.com/hullashoo6/murmur/releases/latest/download/MurmurMac.dmg">Install for Mac (Apple Silicon)</a></div>
       <p class="note">Free &amp; open source &middot; Pay once if you love it &middot; No account needed</p>
-      <p class="note" style="margin-top:8px">First install? Windows may show a blue "Windows protected your PC" screen for new apps - that's normal. Click <b>More info</b>, then <b>Run anyway</b>.</p>
+      <p class="note" style="margin-top:8px">First install? Windows may show a blue "Windows protected your PC" screen - that's normal for new apps. Click <b>More info</b>, then <b>Run anyway</b>.</p>
+      <p class="note" style="margin-top:8px">On Mac (Apple Silicon): open the dmg, drag Murmur to Applications, then right-click the app and choose <b>Open</b> -&gt; <b>Open</b> the first time (a normal one-time step for indie apps). Allow <b>Microphone</b> and <b>Accessibility</b> access when macOS asks.</p>
     </section>
     <section class="steps">
       <div class="card"><div class="n">01</div><h3>Install in one click</h3><p>Download the installer, run it, and Murmur sits quietly in your tray. No Python, no setup wizard maze.</p></div>
-      <div class="card"><div class="n">02</div><h3>Hold and talk</h3><p>Hold Right Ctrl, say what you mean, let go. In email, chat, docs - anywhere you can type, you can now speak.</p></div>
+      <div class="card"><div class="n">02</div><h3>Press and talk</h3><p>Press Right Ctrl once, say what you mean, press again. In email, chat, docs - anywhere you can type, you can now speak.</p></div>
       <div class="card"><div class="n">03</div><h3>Stay private</h3><p>Transcription runs entirely on your own machine. Your voice never leaves your device. No cloud, no subscription.</p></div>
     </section>
-    <p class="privacy">Powered by OpenAI's Whisper, running 100% locally. Your audio is never uploaded, sold, or stored anywhere but your PC.</p>
+    <p class="privacy">Powered by OpenAI's Whisper, running 100% locally. No audio is ever saved or uploaded - no cloud, no account, no telemetry. The only things stored on your computer are your settings and your word counts.</p>
     <footer>Source code on <a href="https://github.com/hullashoo6/murmur">GitHub</a> &middot; MIT licensed</footer>
   </div>
 </body>

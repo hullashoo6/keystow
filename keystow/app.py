@@ -1,5 +1,6 @@
-"""KeyStow voice typing controller: toggle (or hold) hotkey -> transcribe -> type."""
+"""KeyStow controller: one recording, model load or transcription at a time."""
 
+import logging
 import threading
 
 from pynput import keyboard
@@ -28,7 +29,11 @@ class VoiceController:
         self.window = window
         self.recorder = PushToTalkRecorder()
         self.transcriber = None
-        self._busy = threading.Lock()
+        # Held for state transitions, not for model inference. Both the Qt
+        # thread and global-keyboard listener can request operations.
+        self._state_lock = threading.RLock()
+        self._phase = "idle"
+        self._closing = False
         self._listener = None
         self._hotkey_down = False
         self._capturing = False
@@ -52,131 +57,215 @@ class VoiceController:
         )
         self._listener.start()
 
-    # --- hotkey configuration ---
-
     def set_hotkey(self, name: str):
-        self._hotkey_name = name
-        self._hotkey = _resolve_hotkey(name)
-        self._label = hotkey_label(name)
-        settings.set("hotkey", name)
-        self.window.set_hotkey_label(name)
-        self.window.set_state(f"Activation key set to [{self._label}].")
+        with self._state_lock:
+            if self._phase != "idle":
+                return
+            self._hotkey_name = name
+            self._hotkey = _resolve_hotkey(name)
+            self._label = hotkey_label(name)
+            self._hotkey_down = False
+            settings.set("hotkey", name)
+            self.window.set_hotkey_label(name)
+            self.window.set_state(f"Activation key set to [{self._label}].")
 
     def start_hotkey_capture(self):
-        self._capturing = True
-        self.window.set_state("Press the key you want to use to talk...", busy=False)
-
-    # --- model ---
+        with self._state_lock:
+            if self._phase != "idle":
+                return
+            self._capturing = True
+            self.window.set_state("Press the key you want to use to talk...", busy=False)
 
     def _load_model(self, model_size: str):
-        self.window.set_state(f"Loading the '{model_size}' model - first run downloads it, once.", busy=True)
-        config.MODEL_SIZE = model_size
-        loader = ModelLoader(lambda: Transcriber(model_size=model_size))
-        loader.ready.connect(lambda: self._model_ready(loader))
-        loader.failed.connect(lambda msg: self.window.set_state(f"Model failed to load: {msg}", busy=False))
-        loader.start()
-        self._loader = loader  # keep a reference
+        with self._state_lock:
+            if self._phase != "idle":
+                self.window.set_model_selection(config.MODEL_SIZE)
+                return False
+            self._phase = "loading"
+            self.window.set_state(f"Loading '{model_size}' - non-bundled models need a download.", busy=True)
+            try:
+                loader = ModelLoader(lambda: Transcriber(model_size=model_size))
+                loader.ready.connect(lambda: self._model_ready(loader, model_size))
+                loader.failed.connect(lambda msg: self._model_failed(loader, msg))
+                self._loader = loader
+                loader.start()
+            except Exception as exc:  # failed even to start the loader
+                self._phase = "idle"
+                self.window.set_model_selection(config.MODEL_SIZE)
+                self.window.set_state(f"Model failed to load: {exc}", busy=False)
+                return False
+            return True
 
-    def _model_ready(self, loader: ModelLoader):
-        self.transcriber = loader.transcriber
-        if self._toggle:
-            self.window.set_state(f"Ready. Press [{self._label}] anywhere to speak.")
-        else:
-            self.window.set_state(f"Ready. Hold [{self._label}] anywhere and speak.")
+    def _model_ready(self, loader: ModelLoader, model_size: str):
+        with self._state_lock:
+            if self._closing or loader is not self._loader:
+                return
+            self.transcriber = loader.transcriber
+            config.MODEL_SIZE = model_size
+            self.window.set_model_selection(model_size)
+            self._phase = "idle"
+            self.window.set_state(self._ready_message())
 
-    # --- recording ---
+    def _model_failed(self, loader: ModelLoader, message: str):
+        with self._state_lock:
+            if self._closing or loader is not self._loader:
+                return
+            self._phase = "idle"
+            self.window.set_model_selection(config.MODEL_SIZE)
+            recovery = "Previous model is still ready." if self.transcriber else "Choose a model to retry."
+            self.window.set_state(f"Model failed to load: {message}. {recovery}", busy=False)
+
+    def _ready_message(self):
+        verb = "Press" if self._toggle else "Hold"
+        return f"Ready. {verb} [{self._label}] anywhere to speak."
 
     def start_recording(self):
-        if self.transcriber is None or self.recorder.is_recording:
-            return
-        try:
-            self.recorder.start()
-            if self._toggle:
-                self.window.set_state(f"Listening... press [{self._label}] again to type.", recording=True)
-            else:
-                self.window.set_state("Listening... release to type.", recording=True)
-        except Exception as exc:  # noqa: BLE001
-            self.window.set_state(f"Microphone error: {exc}")
+        with self._state_lock:
+            if self._phase != "idle" or self.transcriber is None:
+                return
+            try:
+                self.recorder.start()
+                self._phase = "recording"
+                if self._toggle:
+                    self.window.set_state(f"Listening... press [{self._label}] again to type.", recording=True)
+                else:
+                    self.window.set_state("Listening... release to type.", recording=True)
+            except Exception as exc:  # noqa: BLE001
+                self._phase = "idle"
+                self.window.set_state(f"Microphone error: {exc}. Check access and try again.")
 
     def stop_recording(self):
-        if not self.recorder.is_recording:
-            return
-        audio = self.recorder.stop()
-        self.window.set_state("Transcribing...", busy=True)
-        threading.Thread(target=self._transcribe_and_type, args=(audio,), daemon=True).start()
+        with self._state_lock:
+            if self._phase != "recording":
+                return
+            # Reserve processing before releasing the state lock. No new
+            # recording/model swap can slip between stop and worker launch.
+            self._phase = "processing"
+            try:
+                audio = self.recorder.stop()
+                model = self.transcriber
+                self.window.set_state("Transcribing...", busy=True)
+                worker = threading.Thread(target=self._transcribe_and_type,
+                                          args=(audio, model), daemon=True)
+                self._worker = worker
+                worker.start()
+            except Exception as exc:  # noqa: BLE001
+                logging.exception("recording stop or worker startup failed")
+                self._phase = "idle"
+                self.window.set_state(f"Couldn't finish recording: {exc}. Try again.", busy=False)
 
     def toggle_recording(self):
-        if self.recorder.is_recording:
-            self.stop_recording()
-        else:
-            self.start_recording()
-
-    # --- hotkey handling ---
+        with self._state_lock:
+            if self._phase == "recording":
+                self.stop_recording()
+            elif self._phase == "idle":
+                self.start_recording()
 
     def _key_name(self, key) -> str:
         name = getattr(key, "name", None)
         if name:
             return name
-        char = getattr(key, "char", None)
-        return char or str(key)
+        return getattr(key, "char", None) or str(key)
 
     def _on_press(self, key):
-        # Runs on the keyboard-listener thread: never let an exception kill it.
         try:
-            if self._capturing:
-                self._capturing = False
-                self.set_hotkey(self._key_name(key))
-                return
-            if key != self._hotkey:
-                return
-            if self._toggle:
-                if not self._hotkey_down:
-                    self._hotkey_down = True
-                    self.toggle_recording()
-            else:
-                self.start_recording()
+            with self._state_lock:
+                if self._capturing:
+                    self._capturing = False
+                    self.set_hotkey(self._key_name(key))
+                    return
+                if key != self._hotkey:
+                    return
+                if self._toggle:
+                    if not self._hotkey_down:
+                        self._hotkey_down = True
+                        self.toggle_recording()
+                else:
+                    self.start_recording()
         except Exception:
-            import logging
-
             logging.exception("hotkey press handler failed")
 
     def _on_release(self, key):
         try:
-            if key != self._hotkey:
-                return
-            self._hotkey_down = False
-            if not self._toggle:
-                self.stop_recording()
+            with self._state_lock:
+                if key != self._hotkey:
+                    return
+                self._hotkey_down = False
+                if not self._toggle:
+                    self.stop_recording()
         except Exception:
-            import logging
-
             logging.exception("hotkey release handler failed")
 
-    def _transcribe_and_type(self, audio):
-        import logging
+    def shutdown(self):
+        """Reject new work and prevent a late inference result from pasting.
 
+        A running model load is not forcibly terminated. The UI keeps the Qt
+        event loop alive until it finishes, avoiding QThread destruction.
+        """
+        with self._state_lock:
+            if self._closing:
+                return
+            was_recording = self._phase == "recording"
+            self._closing = True
+            self._phase = "closing"
+            self._capturing = False
+            if was_recording:
+                try:
+                    self.recorder.stop()  # discard audio on explicit quit
+                except Exception:
+                    logging.exception("microphone cleanup during quit failed")
+            if self._listener is not None:
+                self._listener.stop()
+
+    def can_exit(self):
+        loader = getattr(self, "_loader", None)
+        worker = getattr(self, "_worker", None)
+        return (loader is None or not loader.isRunning()) and (worker is None or not worker.is_alive())
+
+    def wait_for_shutdown(self):
+        """Final safety net for an OS-triggered exit outside the tray path."""
+        self.shutdown()
+        loader = getattr(self, "_loader", None)
+        if loader is not None and loader.isRunning():
+            loader.wait()
+        worker = getattr(self, "_worker", None)
+        if worker is not None and worker is not threading.current_thread():
+            worker.join()
+
+    def _transcribe_and_type(self, audio, model):
+        # Stay processing through paste. Quit wins over any result that has
+        # not yet started insertion. Already-dispatched OS paste cannot undo.
+        result = "Didn't catch that - try again."
         try:
-            text = self.transcriber.transcribe(audio) if self.transcriber else ""
+            text = model.transcribe(audio) if model else ""
+            with self._state_lock:
+                if self._closing:
+                    return
+                if text:
+                    self.window.show_transcript(text)
+                    # Statistics are secondary; a disk error must not lose
+                    # otherwise usable dictation.
+                    try:
+                        stats.add_words(len(text.split()))
+                        self.window.refresh_stats()
+                    except Exception:
+                        logging.exception("word statistics could not be saved")
+                    try:
+                        type_text(text)
+                    except Exception:
+                        logging.exception("typing failed")
+                        result = "Couldn't paste into the other app. Your transcript is shown below."
+                    else:
+                        verb = "Press" if self._toggle else "Hold"
+                        result = f"Paste requested. {verb} [{self._label}] to speak again."
         except Exception as exc:
             logging.exception("transcription failed")
-            self.window.set_state(f"Transcription failed: {exc}", busy=False)
-            return
-        if text:
-            stats.add_words(len(text.split()))
-            self.window.show_transcript(text)
-            self.window.refresh_stats()
-            try:
-                type_text(text)
-            except Exception:
-                logging.exception("typing failed")
-                self.window.set_state("Couldn't type into the other app - text is above, copy it.")
-                return
-            if self._toggle:
-                self.window.set_state(f"Typed. Press [{self._label}] to speak again.")
-            else:
-                self.window.set_state(f"Typed. Hold [{self._label}] to speak again.")
-        else:
-            self.window.set_state("Didn't catch that - try again.")
+            result = f"Transcription failed: {exc}. Try again."
+        finally:
+            with self._state_lock:
+                if not self._closing:
+                    self._phase = "idle"
+                    self.window.set_state(result, busy=False)
 
 
 def main() -> None:

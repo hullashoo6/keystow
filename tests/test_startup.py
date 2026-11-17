@@ -30,6 +30,12 @@ class StartupTest(unittest.TestCase):
                 def start(self):
                     calls.append("started")
                     self.window.set_state("Ready for startup wiring check.")
+                def shutdown(self):
+                    pass
+                def can_exit(self):
+                    return True
+                def wait_for_shutdown(self):
+                    pass
 
             def verify():
                 gc.collect()

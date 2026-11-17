@@ -79,8 +79,55 @@ QPushButton#record:disabled {{
 }}
 QComboBox {{
     background-color: {CARD};
+    border: 1px solid #3A3A4E;
+    border-radius: 8px;
+    padding: 6px 10px;
+    min-height: 18px;
+    color: {TEXT};
+}}
+QComboBox:hover {{
+    border-color: {ACCENT};
+}}
+QComboBox::drop-down {{
     border: none;
+    width: 22px;
+}}
+QComboBox::down-arrow {{
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid {MUTED};
+    margin-right: 8px;
+}}
+QComboBox QAbstractItemView {{
+    background-color: {CARD};
+    color: {TEXT};
+    border: 1px solid #3A3A4E;
+    border-radius: 8px;
+    padding: 4px;
+    selection-background-color: {ACCENT};
+    selection-color: white;
+    outline: none;
+}}
+QMenu {{
+    background-color: {CARD};
+    color: {TEXT};
+    border: 1px solid #3A3A4E;
+    border-radius: 8px;
+    padding: 6px;
+}}
+QMenu::item {{
+    padding: 6px 28px 6px 12px;
     border-radius: 6px;
+}}
+QMenu::item:selected {{
+    background-color: {ACCENT};
+    color: white;
+}}
+QToolTip {{
+    background-color: {CARD};
+    color: {TEXT};
+    border: 1px solid #3A3A4E;
     padding: 4px 8px;
 }}
 QProgressBar {{
@@ -140,6 +187,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.setStyleSheet(STYLESHEET)
         self.setWindowTitle("Murmur")
         self.setWindowIcon(tray_icons.icon("app", fallback=lambda: _tray_icon(ACCENT)))
         self.setMinimumWidth(360)
@@ -223,7 +271,16 @@ class MainWindow(QMainWindow):
         wrapper = QWidget()
         outer = QVBoxLayout(wrapper)
         outer.setContentsMargins(16, 16, 16, 16)
-        outer.addWidget(card)
+        # Keep the card centered and capped at a comfortable width when the
+        # window is maximized, instead of stretching edge to edge.
+        outer.addStretch()
+        center_row = QHBoxLayout()
+        center_row.addStretch()
+        card.setMaximumWidth(520)
+        center_row.addWidget(card)
+        center_row.addStretch()
+        outer.addLayout(center_row)
+        outer.addStretch()
         self.setCentralWidget(wrapper)
 
         self.model_box.currentTextChanged.connect(self._model_changed)

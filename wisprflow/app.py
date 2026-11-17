@@ -1,4 +1,4 @@
-"""Voice typing controller: hotkey + record button -> transcribe -> type."""
+"""Murmur voice typing controller: hotkey + record button -> transcribe -> type."""
 
 import threading
 

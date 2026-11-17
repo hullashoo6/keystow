@@ -1,10 +1,10 @@
-#define MyAppName "Murmur"
+#define MyAppName "KeyStow"
 #define MyAppVersion "1.0.0"
-#define MyAppPublisher "Murmur"
-#define MyAppExeName "Murmur.exe"
+#define MyAppPublisher "KeyStow"
+#define MyAppExeName "KeyStow.exe"
 
 [Setup]
-AppId={{8F3A2B71-9C4E-4D2A-A5F1-MURMUR000001}
+AppId={{8F3A2B71-9C4E-4D2A-A5F1-KEYST0W00001}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -12,17 +12,17 @@ DefaultDirName={%USERPROFILE}\Downloads\{#MyAppName}
 DisableDirPage=yes
 DefaultGroupName={#MyAppName}
 OutputDir=installer
-OutputBaseFilename=MurmurSetup
+OutputBaseFilename=KeyStowSetup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=murmur.ico
+SetupIconFile=keystow.ico
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Murmur"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "KeyStow"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue
 
 [Files]
 Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -35,4 +35,4 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch Murmur"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch KeyStow"; Flags: nowait postinstall skipifsilent

@@ -1,17 +1,26 @@
-"""Murmur voice typing controller: hotkey + record button -> transcribe -> type."""
+"""Murmur voice typing controller: toggle (or hold) hotkey -> transcribe -> type."""
 
 import threading
 
 from pynput import keyboard
 
-from . import config
+from . import config, settings, stats
 from .recorder import PushToTalkRecorder
 from .transcriber import Transcriber
 from .typer import type_text
-from .ui import MainWindow, ModelLoader, run_app
+from .ui import MainWindow, ModelLoader, hotkey_label, run_app
 
-HOTKEY = getattr(keyboard.Key, config.HOTKEY, keyboard.Key.ctrl_r)
-QUIT_KEY = keyboard.Key.esc
+DEFAULT_HOTKEY = keyboard.Key.ctrl_r
+
+
+def _resolve_hotkey(name: str):
+    key = getattr(keyboard.Key, name, None)
+    if key is not None:
+        return key
+    try:
+        return keyboard.KeyCode.from_char(name)
+    except Exception:  # noqa: BLE001
+        return DEFAULT_HOTKEY
 
 
 class VoiceController:
@@ -21,9 +30,20 @@ class VoiceController:
         self.transcriber = None
         self._busy = threading.Lock()
         self._listener = None
+        self._hotkey_down = False
+        self._capturing = False
+        self._toggle = config.TOGGLE_MODE
+        self._hotkey_name = settings.get("hotkey", config.HOTKEY)
+        self._hotkey = _resolve_hotkey(self._hotkey_name)
+        self._label = hotkey_label(self._hotkey_name)
         window._on_model_change = self._load_model
-        window.record_pressed.connect(self.start_recording)
-        window.record_released.connect(self.stop_recording)
+        window.hotkey_selected.connect(self.set_hotkey)
+        window.hotkey_capture_requested.connect(self.start_hotkey_capture)
+        if self._toggle:
+            window.record_toggled.connect(self.toggle_recording)
+        else:
+            window.record_pressed.connect(self.start_recording)
+            window.record_released.connect(self.stop_recording)
 
     def start(self):
         self._load_model(config.MODEL_SIZE)
@@ -31,6 +51,20 @@ class VoiceController:
             on_press=self._on_press, on_release=self._on_release
         )
         self._listener.start()
+
+    # --- hotkey configuration ---
+
+    def set_hotkey(self, name: str):
+        self._hotkey_name = name
+        self._hotkey = _resolve_hotkey(name)
+        self._label = hotkey_label(name)
+        settings.set("hotkey", name)
+        self.window.set_hotkey_label(name)
+        self.window.set_state(f"Activation key set to [{self._label}].")
+
+    def start_hotkey_capture(self):
+        self._capturing = True
+        self.window.set_state("Press the key you want to use to talk...", busy=False)
 
     # --- model ---
 
@@ -45,9 +79,10 @@ class VoiceController:
 
     def _model_ready(self, loader: ModelLoader):
         self.transcriber = loader.transcriber
-        self.window.set_state(
-            f"Ready. Hold [{self.window._label_map.get(config.HOTKEY, config.HOTKEY)}] anywhere and speak."
-        )
+        if self._toggle:
+            self.window.set_state(f"Ready. Press [{self._label}] anywhere to speak.")
+        else:
+            self.window.set_state(f"Ready. Hold [{self._label}] anywhere and speak.")
 
     # --- recording ---
 
@@ -56,7 +91,10 @@ class VoiceController:
             return
         try:
             self.recorder.start()
-            self.window.set_state("Listening... release to type.", recording=True)
+            if self._toggle:
+                self.window.set_state(f"Listening... press [{self._label}] again to type.", recording=True)
+            else:
+                self.window.set_state("Listening... release to type.", recording=True)
         except Exception as exc:  # noqa: BLE001
             self.window.set_state(f"Microphone error: {exc}")
 
@@ -67,28 +105,55 @@ class VoiceController:
         self.window.set_state("Transcribing...", busy=True)
         threading.Thread(target=self._transcribe_and_type, args=(audio,), daemon=True).start()
 
+    def toggle_recording(self):
+        if self.recorder.is_recording:
+            self.stop_recording()
+        else:
+            self.start_recording()
+
+    # --- hotkey handling ---
+
+    def _key_name(self, key) -> str:
+        name = getattr(key, "name", None)
+        if name:
+            return name
+        char = getattr(key, "char", None)
+        return char or str(key)
+
     def _on_press(self, key):
-        if key == HOTKEY:
+        if self._capturing:
+            self._capturing = False
+            self.set_hotkey(self._key_name(key))
+            return
+        if key != self._hotkey:
+            return
+        if self._toggle:
+            if not self._hotkey_down:
+                self._hotkey_down = True
+                self.toggle_recording()
+        else:
             self.start_recording()
 
     def _on_release(self, key):
-        if key == HOTKEY:
+        if key != self._hotkey:
+            return
+        self._hotkey_down = False
+        if not self._toggle:
             self.stop_recording()
-        elif key == QUIT_KEY:
-            self.window.close()
-        return True
 
     def _transcribe_and_type(self, audio):
-        with self._busy:
-            text = self.transcriber.transcribe(audio) if self.transcriber else ""
-            if text:
-                self.window.show_transcript(text)
-                type_text(text)
-                self.window.set_state(
-                    f"Typed. Hold [{self.window._label_map.get(config.HOTKEY, config.HOTKEY)}] to speak again."
-                )
+        text = self.transcriber.transcribe(audio) if self.transcriber else ""
+        if text:
+            stats.add_words(len(text.split()))
+            self.window.show_transcript(text)
+            self.window.refresh_stats()
+            type_text(text)
+            if self._toggle:
+                self.window.set_state(f"Typed. Press [{self._label}] to speak again.")
             else:
-                self.window.set_state("Didn't catch that - try again.")
+                self.window.set_state(f"Typed. Hold [{self._label}] to speak again.")
+        else:
+            self.window.set_state("Didn't catch that - try again.")
 
 
 def main() -> None:

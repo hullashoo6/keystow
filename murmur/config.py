@@ -2,8 +2,9 @@
 
 import os
 
-# Whisper model size: tiny, base, small, medium, large-v3.
-# "base" is a good speed/accuracy tradeoff for English on CPU.
+# Whisper model size: tiny, base, small, medium, large-v3, turbo.
+# "base" is bundled with the installer and is a good speed/accuracy tradeoff
+# on CPU; "turbo" (large-v3-turbo) is the accuracy pick and downloads once.
 MODEL_SIZE = os.environ.get("WISPR_MODEL", "base")
 
 # "cpu" works everywhere; use "cuda" with an NVIDIA GPU for big speedups.

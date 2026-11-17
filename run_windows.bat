@@ -1,4 +1,4 @@
 @echo off
-REM Murmur - launch
+REM KeyStow - launch
 call .venv\Scripts\activate
-python -m murmur
+python -m keystow

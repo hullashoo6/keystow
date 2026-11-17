@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Murmur - Speak softly, it's typed.</title>
+<meta name="description" content="Murmur is private, offline voice typing for Windows. Hold a key, speak, release - polished text appears wherever your cursor is. Pay once, own it forever.">
+<style>
+  :root { --bg:#0b0e14; --panel:#121826; --text:#e8ecf4; --muted:#9aa4b8; --accent:#7c8cff; --accent2:#a78bfa; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.6; }
+  .wrap { max-width:860px; margin:0 auto; padding:0 24px; }
+  header { padding:28px 0; display:flex; align-items:center; gap:10px; }
+  .logo { font-size:22px; font-weight:700; letter-spacing:-0.5px; }
+  .logo span { color:var(--accent); }
+  .hero { text-align:center; padding:80px 0 60px; }
+  .hero h1 { font-size:52px; letter-spacing:-2px; line-height:1.1; }
+  .hero h1 span { background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .hero p { color:var(--muted); font-size:19px; max-width:560px; margin:18px auto 0; }
+  .cta { display:inline-block; margin-top:34px; background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#fff; font-size:18px; font-weight:600; padding:16px 42px; border-radius:12px; text-decoration:none; box-shadow:0 8px 30px rgba(124,140,255,.35); }
+  .cta:hover { transform:translateY(-1px); }
+  .note { color:var(--muted); font-size:13px; margin-top:14px; }
+  .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; padding:40px 0; }
+  .card { background:var(--panel); border:1px solid #1f2940; border-radius:14px; padding:22px; }
+  .card .n { color:var(--accent); font-weight:700; font-size:14px; }
+  .card h3 { font-size:17px; margin:6px 0 6px; }
+  .card p { color:var(--muted); font-size:14px; }
+  .privacy { text-align:center; color:var(--muted); font-size:14px; padding:10px 0 60px; }
+  footer { border-top:1px solid #1f2940; padding:24px 0 40px; color:var(--muted); font-size:13px; text-align:center; }
+  footer a { color:var(--accent); text-decoration:none; }
+  @media (max-width:640px){ .hero h1{font-size:38px;} .steps{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header><div class="logo">murmur<span>.</span></div></header>
+    <section class="hero">
+      <h1>Speak softly,<br><span>it's typed.</span></h1>
+      <p>Murmur turns your voice into text, anywhere on Windows. Hold a key, speak naturally, release - polished words appear right where your cursor is.</p>
+      <a class="cta" href="https://github.com/hullashoo6/murmur/releases/latest/download/MurmurSetup.exe">Install for Windows</a>
+      <p class="note">Free &amp; open source &middot; Pay once if you love it &middot; No account needed</p>
+    </section>
+    <section class="steps">
+      <div class="card"><div class="n">01</div><h3>Install in one click</h3><p>Download the installer, run it, and Murmur sits quietly in your tray. No Python, no setup wizard maze.</p></div>
+      <div class="card"><div class="n">02</div><h3>Hold and talk</h3><p>Hold Right Ctrl, say what you mean, let go. In email, chat, docs - anywhere you can type, you can now speak.</p></div>
+      <div class="card"><div class="n">03</div><h3>Stay private</h3><p>Transcription runs entirely on your own machine. Your voice never leaves your device. No cloud, no subscription.</p></div>
+    </section>
+    <p class="privacy">Powered by OpenAI's Whisper, running 100% locally. Your audio is never uploaded, sold, or stored anywhere but your PC.</p>
+    <footer>Source code on <a href="https://github.com/hullashoo6/murmur">GitHub</a> &middot; MIT licensed</footer>
+  </div>
+</body>
+</html>

@@ -463,6 +463,9 @@ def run_app(controller_factory):
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # keep running in the tray
     window = MainWindow()
-    controller_factory(window)
+    # Keep the controller (and its worker/listener references) alive for the
+    # entire Qt event loop. Construction alone does not start dictation.
+    controller = controller_factory(window)
+    controller.start()
     window.show()  # first launch shows the window; after that it hides to the tray
     sys.exit(app.exec())

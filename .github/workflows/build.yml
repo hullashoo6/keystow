@@ -43,7 +43,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v1.0.0 installer\installer\KeyStowSetup.exe --clobber || gh release create v1.0.0 installer\installer\KeyStowSetup.exe --title "KeyStow v1.0.0" --notes "Private push-to-talk voice typing for Windows. Download KeyStowSetup.exe, run it, and KeyStow appears in your tray. Press Right Ctrl, speak, press again - it types."
+          gh release upload v1.0.1 installer\installer\KeyStowSetup.exe --clobber || gh release create v1.0.1 installer\installer\KeyStowSetup.exe --target $env:GITHUB_SHA --title "KeyStow v1.0.1" --notes "Private push-to-talk voice typing for Windows. Download KeyStowSetup.exe, run it, and KeyStow appears in your tray. New/default installs: hold Right Ctrl while speaking, release to transcribe and request paste. Existing custom-key settings retain toggle unless explicitly changed. Real-machine acceptance is still pending."
 
   build-mac:
     runs-on: macos-latest
@@ -65,6 +65,9 @@ jobs:
       - name: Build KeyStow.app with PyInstaller
         run: |
           pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data "models/faster-whisper-base:models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      - name: Set macOS bundle version
+        run: |
+          python -c "import plistlib; p='dist/KeyStow.app/Contents/Info.plist'; d=plistlib.load(open(p,'rb')); d.update(CFBundleShortVersionString='1.0.1', CFBundleVersion='1.0.1'); plistlib.dump(d,open(p,'wb'))"
       - name: Create DMG
         run: |
           mkdir -p dist/dmg
@@ -74,4 +77,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v1.0.0 dist/KeyStowMac.dmg --clobber || gh release create v1.0.0 dist/KeyStowMac.dmg --title "KeyStow v1.0.0" --notes "Private voice typing for Windows and Mac: local, offline, no account. Windows: run KeyStowSetup.exe. Mac (Apple Silicon): open KeyStowMac.dmg, drag to Applications, right-click -> Open on first launch, then allow Microphone and Accessibility access."
+          gh release upload v1.0.1 dist/KeyStowMac.dmg --clobber || gh release create v1.0.1 dist/KeyStowMac.dmg --target "$GITHUB_SHA" --title "KeyStow v1.0.1" --notes "Local voice typing for Windows and Apple Silicon Mac. v1.0.1 introduces hold-to-speak by default for uncustomized installs, preserves legacy custom-key toggle and explicit modes, and fixes interrupted legacy-data migration. Existing custom keys may retain toggle; KEYSTOW_TOGGLE=0 explicitly selects hold. No installed hardware acceptance is claimed. Windows: run KeyStowSetup.exe. Mac: open KeyStowMac.dmg and allow required Microphone and Accessibility permissions. Unsigned/security behavior still requires real-device verification."

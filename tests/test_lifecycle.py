@@ -69,6 +69,21 @@ class LifecycleTest(unittest.TestCase):
         self.c.transcriber.transcribe.return_value = 'second session'
         self.paste = self.module.type_text
 
+    def test_hotkey_write_failure_preserves_active_key_and_allows_retry(self):
+        old_name, old_key = self.c._hotkey_name, self.c._hotkey
+        with patch.object(self.module.settings, 'set', side_effect=OSError('storage blocked')):
+            self.c.set_hotkey('shift_r')
+        self.assertEqual(self.c._hotkey_name, old_name)
+        self.assertEqual(self.c._hotkey, old_key)
+        self.window.set_hotkey_label.assert_called_with(old_name)
+        self.assertIn('Could not save', self.window.set_state.call_args.args[0])
+        with patch.object(self.module.settings, 'set', side_effect=[None, OSError('second write blocked')]):
+            self.c.set_hotkey('shift_r')
+        self.assertEqual(self.c._hotkey_name, old_name)
+        self.assertEqual(self.c._hotkey, old_key)
+        self.c.set_hotkey('shift_r')
+        self.assertEqual(self.c._hotkey_name, 'shift_r')
+
     def finish(self):
         self.c._worker.join(3)
         self.assertFalse(self.c._worker.is_alive(), 'worker stuck')

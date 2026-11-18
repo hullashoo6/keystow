@@ -39,3 +39,9 @@ This is an AI-assisted product-building project. Describe the problem, product d
 ## Deferred until the core is demonstrated
 
 Cloud cleanup, custom styles, expanded vocabulary tools, automatic modes, and launch activity are not priorities. Optional larger local models are supporting choices, not a substitute for proving the default path. Downloads for non-bundled models require internet; their offline availability must not be implied before download.
+
+## Current recovery evidence, not installed acceptance
+
+The2026-11-18 engineering source snapshot `68ddeb8284849739ccfb79cce48059737233645d` passed61tests from a fresh public clone. It adds bounded startup-storage recovery: keep the intended path and existing data, open with a persistent warning if storage cannot be opened, retain useful transcript output, and allow persistence retries after the user repairs the path. It does not promise general storage health, backup or model repair. Clipboard and autostart fixes are also source/component verified only. Downloaded v1.0.1 does not contain these branch changes.
+
+The next useful result is a verified exact combined tree and guarded release evidence, not more features or a higher test count. Preserve the current page/README and owner-set price, keep earlier release assets unchanged, and distinguish build/download success from real Windows/macOS install-to-dictation acceptance. Tonight's dispatch waits for the evidence bundle and explicit owner GO.

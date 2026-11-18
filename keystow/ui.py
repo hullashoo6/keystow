@@ -351,11 +351,11 @@ class MainWindow(QMainWindow):
             # First run: default to starting at login so KeyStow is always there.
             try:
                 autostart.set_enabled(True)
-            except OSError:
-                # Leave initialization pending so a later launch can retry.
-                pass
-            else:
                 settings.set("autostart_initialized", True)
+            except OSError:
+                # Registration or marker persistence may fail independently.
+                # Keep UI startup usable; an absent marker remains retryable.
+                pass
         self.autostart_action.setChecked(autostart.is_enabled())
         self.autostart_action.triggered.connect(self._toggle_autostart)
         menu.addAction(self.autostart_action)

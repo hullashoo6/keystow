@@ -7,6 +7,28 @@ import unittest
 
 
 class AutostartInitTest(unittest.TestCase):
+    def test_settings_write_failure_after_registration_does_not_block_ui(self):
+        script = textwrap.dedent('''
+            from unittest.mock import patch
+            from PySide6.QtWidgets import QApplication
+            from keystow import ui
+            app = QApplication([])
+            with patch.object(ui.autostart, 'set_enabled') as register, \
+                 patch.object(ui.autostart, 'is_enabled', return_value=True), \
+                 patch.object(ui.settings, 'get', side_effect=lambda k,d=None:d), \
+                 patch.object(ui.settings, 'set', side_effect=OSError('synthetic settings disk failure')):
+                window = ui.MainWindow()
+                assert window.autostart_action.isChecked()
+                assert window.record_btn is not None
+                second = ui.MainWindow()
+                assert second.autostart_action.isChecked()
+                assert register.call_count == 2  # fixed per-user entry is idempotent
+        ''')
+        result = subprocess.run([sys.executable, '-c', script],
+                                env=dict(os.environ, QT_QPA_PLATFORM='offscreen'),
+                                text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_failed_first_registration_retries_without_resetting_explicit_optout(self):
         script = textwrap.dedent('''
             from unittest.mock import patch, Mock

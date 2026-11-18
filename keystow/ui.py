@@ -352,8 +352,10 @@ class MainWindow(QMainWindow):
             try:
                 autostart.set_enabled(True)
             except OSError:
+                # Leave initialization pending so a later launch can retry.
                 pass
-            settings.set("autostart_initialized", True)
+            else:
+                settings.set("autostart_initialized", True)
         self.autostart_action.setChecked(autostart.is_enabled())
         self.autostart_action.triggered.connect(self._toggle_autostart)
         menu.addAction(self.autostart_action)

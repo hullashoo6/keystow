@@ -2,7 +2,7 @@
 
 Speak softly, it's typed.
 
-Local voice typing: focus an editable field, press a key, speak, then press again to request a paste of the transcript. Speech recognition uses faster-whisper on your own machine.
+Local voice typing: focus an editable field, hold a key while speaking, then release it to request a paste of the transcript. Speech recognition uses faster-whisper on your own machine.
 
 KeyStow is an AI-assisted project under active reliability testing. It is not a verified feature-for-feature Wispr Flow replacement. See the [product vision](docs/PRODUCT_VISION.md) and [living acceptance checklist](docs/CHECKLIST.md) for evidence and open checks.
 
@@ -38,12 +38,14 @@ The workflow targets an Apple Silicon app named `KeyStowMac.dmg`. Confirm that i
 
 ## Use
 
-- Default: press **Right Ctrl** once to start recording, then press it again to stop and transcribe.
+- Current source default for uncustomized installs: **hold Right Ctrl** while speaking, then **release** to stop and transcribe.
 - Focus the destination field first. Clipboard insertion acts on the app focused when paste is requested. Changing focus during processing can send text to a different field. Secure/elevated fields and some apps may reject paste.
 - Use the tray menu or window to choose an activation key. Avoid keys that conflict with shortcuts you depend on.
 - Close the window to hide it to the tray; choose **Quit KeyStow** in the tray menu to exit.
 - Model loading and transcription can take time on CPU. Larger models need more storage and memory and are not automatically better for every device or utterance.
-- For hold-to-talk, set environment variable `KEYSTOW_TOGGLE=0` before launch. The default is toggle mode.
+- Existing saved key customizations (including a saved Right Ctrl selection) conservatively retain prior toggle behavior: press once to start, press again to stop. Changing a key now saves the active mode too.
+- `KEYSTOW_TOGGLE=0` explicitly selects hold; `KEYSTOW_TOGGLE=1` selects toggle. Environment mode wins over saved `activation_mode` (`hold` or `toggle`), which wins over the legacy custom-key rule. An explicit `KEYSTOW_HOTKEY` without a mode also retains legacy toggle behavior. Startup does not rewrite preferences.
+- The currently published **v1.0.0 installers still default to toggle**, not this new source default. No new hold-default installer has been published. Check the exact version before following hold instructions.
 - Start-at-login is available in the tray menu. Check its actual setting and installed path after upgrades.
 
 Transcription is fallible. Review text before sending or using it. The app does not independently verify that a destination accepted the paste. Clipboard restoration is text-only and can be affected by other apps; do not rely on it to preserve images, files or rich clipboard formats.

@@ -112,7 +112,7 @@ class LifecycleTest(unittest.TestCase):
         self.paste.side_effect = RuntimeError('clipboard unavailable')
         self.c.start_recording(); self.c.stop_recording(); self.finish()
         self.window.show_transcript.assert_called_once_with('second session')
-        self.assertIn("Couldn't paste", self.window.set_state.call_args.args[0])
+        self.assertIn("Paste or clipboard cleanup failed", self.window.set_state.call_args.args[0])
         self.paste.side_effect = None
         self.c.start_recording()
         self.assertEqual(self.c._phase, 'recording')

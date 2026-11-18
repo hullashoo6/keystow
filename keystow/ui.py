@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import autostart, config, settings, stats, tray_icons
+from . import autostart, config, paths, settings, stats, tray_icons
 
 ACCENT = "#6C5CE7"
 BG = "#1E1E2E"
@@ -234,6 +234,19 @@ class MainWindow(QMainWindow):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
+        self.storage_warning = QLabel()
+        self.storage_warning.setObjectName("status")
+        self.storage_warning.setWordWrap(True)
+        if paths.startup_storage_error() is not None:
+            self.storage_warning.setText(
+                "Local storage could not be opened at startup. Settings and word counts "
+                "may not be saved. Check your .keystow path, then restart KeyStow."
+            )
+        if self.storage_warning.text():
+            self.storage_warning.setMinimumHeight(self.storage_warning.heightForWidth(280))
+        self.storage_warning.setVisible(bool(self.storage_warning.text()))
+        layout.addWidget(self.storage_warning)
+
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
         layout.addWidget(self.progress)
@@ -264,6 +277,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.transcript)
 
         self.stats_label = QLabel()
+        self.stats_label.setWordWrap(True)
         self.stats_label.setObjectName("status")
         self.stats_label.setAlignment(Qt.AlignCenter)
         self._do_refresh_stats()
@@ -294,9 +308,10 @@ class MainWindow(QMainWindow):
 
         opts = QHBoxLayout()
         self.noise_box = QCheckBox("Suppress background noise (fans, hum)")
-        self.noise_box.setChecked(settings.get("noise_suppression", True))
+        self._noise_saved = settings.get("noise_suppression", True)
+        self.noise_box.setChecked(self._noise_saved)
         self.noise_box.setToolTip("Cleans up mic noise before transcribing. Leave on.")
-        self.noise_box.toggled.connect(lambda on: settings.set("noise_suppression", bool(on)))
+        self.noise_box.toggled.connect(self._save_noise_preference)
         opts.addWidget(self.noise_box)
         opts.addStretch()
         layout.addLayout(opts)
@@ -436,11 +451,26 @@ class MainWindow(QMainWindow):
 
     # --- tray & window plumbing ---
 
+    def _save_noise_preference(self, checked):
+        try:
+            settings.set("noise_suppression", bool(checked))
+            self._noise_saved = bool(checked)
+        except OSError:
+            self.noise_box.blockSignals(True)
+            self.noise_box.setChecked(self._noise_saved)
+            self.noise_box.blockSignals(False)
+            self.storage_warning.setText(
+                "Could not save the noise setting. Your previous setting is still selected. "
+                "Check your .keystow path, then restart KeyStow."
+            )
+            self.storage_warning.show()
+
     def _toggle_autostart(self, checked):
         try:
             autostart.set_enabled(checked)
         except OSError:
             self.autostart_action.setChecked(not checked)
+            self.set_state("Could not change start at login. Your previous choice is still selected.")
 
     def _tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
@@ -490,6 +520,9 @@ class MainWindow(QMainWindow):
         self._sig_stats.emit()
 
     def _do_refresh_stats(self):
+        if paths.startup_storage_error() is not None:
+            self.stats_label.setText("Word counts unavailable.")
+            return
         self.stats_label.setText(
             f"Words dictated - today: {stats.today():,}  |  all time: {stats.total():,}"
         )

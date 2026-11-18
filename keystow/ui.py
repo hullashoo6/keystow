@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
         self.setMinimumWidth(360)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
-        self._toggle = config.TOGGLE_MODE
+        self._toggle = settings.toggle_mode()
         self._hotkey_name = settings.get("hotkey", config.HOTKEY)
         self._hotkey_label = hotkey_label(self._hotkey_name)
 
@@ -285,7 +285,8 @@ class MainWindow(QMainWindow):
         self.hotkey_box.addItem("Custom key...", CUSTOM_KEY)
         idx = self.hotkey_box.findData(self._hotkey_name)
         self.hotkey_box.setCurrentIndex(idx if idx >= 0 else 0)
-        self.hotkey_box.setToolTip("Press this key to start and stop listening.")
+        self.hotkey_box.setToolTip("Press once to start, again to stop." if self._toggle
+                                   else "Hold this key to speak; release to stop and type.")
         self.hotkey_box.currentIndexChanged.connect(self._hotkey_combo_changed)
         row.addWidget(self.hotkey_box)
         row.addStretch()

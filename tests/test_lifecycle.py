@@ -183,5 +183,115 @@ class LifecycleTest(unittest.TestCase):
         self.assertEqual(self.c._phase, 'recording')
 
 
+    def test_hold_repeat_and_duplicate_release_are_one_capture(self):
+        self.c._toggle = False
+        key = self.c._hotkey
+        self.c._on_press(key)
+        for _ in range(8): self.c._on_press(key)
+        self.assertEqual(self.c.recorder.starts,1)
+        self.assertEqual(self.c.recorder.stops,0)
+        self.c._on_release('unrelated')
+        self.assertEqual(self.c.recorder.stops,0)
+        self.c._on_release(key); self.finish()
+        self.c._on_release(key)
+        self.assertEqual(self.c.recorder.stops,1)
+        self.paste.assert_called_once_with('second session')
+
+    def test_hold_failed_start_does_not_repeat_retry_until_release(self):
+        self.c._toggle = False
+        self.c.recorder.fail_start = True
+        key = self.c._hotkey
+        self.c._on_press(key)
+        self.c.recorder.fail_start = False
+        self.c._on_press(key)
+        self.assertEqual(self.c.recorder.starts,0)
+        self.c._on_release(key)
+        self.assertEqual(self.c.recorder.stops,0)
+        self.c._on_press(key); self.c._on_release(key); self.finish()
+        self.paste.assert_called_once()
+
+    def test_silent_hold_cycles_then_new_text_never_reuse_prior_result(self):
+        self.c._toggle = False
+        key = self.c._hotkey
+        self.c.transcriber.transcribe.side_effect = ['prior', '', '', RuntimeError('inference failed'), 'new text']
+        for _ in range(5):
+            self.c._on_press(key); self.c._on_release(key); self.finish()
+        self.assertEqual([call.args[0] for call in self.paste.call_args_list],['prior','new text'])
+        self.assertEqual(self.c.recorder.starts,5)
+        self.assertFalse(self.c._hotkey_down)
+
+    def test_custom_capture_key_repeat_cannot_start_recording(self):
+        self.c._toggle = False
+        self.c.start_hotkey_capture()
+        key = self.c._hotkey
+        self.c._on_press(key)
+        for _ in range(4): self.c._on_press(key)
+        self.assertEqual(self.c.recorder.starts,0)
+        self.c._on_release(key)
+        self.assertEqual(self.c.recorder.stops,0)
+        self.module.settings.set.assert_any_call('activation_mode','hold')
+        self.c._on_press(key); self.c._on_release(key); self.finish()
+
+    def test_shutdown_mid_hold_and_fresh_controller_start_idle(self):
+        self.c._toggle = False
+        key = self.c._hotkey
+        self.c._on_press(key); self.c.shutdown()
+        self.c._on_release(key); self.c._on_press(key)
+        self.assertEqual(self.c.recorder.starts,1)
+        self.assertEqual(self.c.recorder.stops,1)
+        self.assertEqual(self.c._phase,'closing')
+        self.assertFalse(self.c._hotkey_down)
+        self.paste.assert_not_called()
+        restarted = self.module.VoiceController(self.window)
+        self.assertEqual(restarted._phase,'idle')
+        self.assertFalse(restarted._hotkey_down)
+
+    def test_explicit_toggle_still_requires_two_separate_presses(self):
+        self.c._toggle = True
+        key = self.c._hotkey
+        self.c._on_press(key); self.c._on_press(key); self.c._on_release(key)
+        self.assertEqual(self.c._phase,'recording')
+        self.assertEqual(self.c.recorder.stops,0)
+        self.c._on_press(key); self.c._on_release(key); self.finish()
+        self.assertEqual(self.c.recorder.starts,1)
+        self.assertEqual(self.c.recorder.stops,1)
+
+
+    def test_hold_stop_failure_then_next_hold_recovers(self):
+        self.c._toggle = False
+        key = self.c._hotkey
+        self.c._on_press(key)
+        self.c.recorder.fail_stop = True
+        self.c._on_release(key)
+        self.assertEqual(self.c._phase,'idle')
+        self.assertFalse(self.c._hotkey_down)
+        self.paste.assert_not_called()
+        self.c.recorder.fail_stop = False
+        self.c._on_press(key); self.c._on_release(key); self.finish()
+        self.paste.assert_called_once_with('second session')
+
+    def test_key_pressed_while_processing_cannot_start_from_auto_repeat(self):
+        self.c._toggle = False
+        key = self.c._hotkey
+        entered, release = threading.Event(), threading.Event()
+        def infer(audio):
+            entered.set()
+            self.assertTrue(release.wait(3))
+            return ''
+        self.c.transcriber.transcribe.side_effect = infer
+        self.c._on_press(key); self.c._on_release(key)
+        self.assertTrue(entered.wait(2))
+        self.c._on_press(key)  # ignored while processing, still physically down
+        release.set(); self.finish()
+        self.c._on_press(key)  # repeat after idle is not a new press
+        self.assertEqual(self.c.recorder.starts,1)
+        self.c._on_release(key)
+        self.assertEqual(self.c.recorder.stops,1)
+        self.c.transcriber.transcribe.side_effect = None
+        self.c.transcriber.transcribe.return_value = 'fresh'
+        self.c._on_press(key); self.c._on_release(key); self.finish()
+        self.paste.assert_called_once_with('fresh')
+
+
 if __name__ == '__main__':
     unittest.main()

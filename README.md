@@ -36,16 +36,6 @@ Source installs do not include the bundled speech model. First model load normal
 
 The workflow targets an Apple Silicon app named `KeyStowMac.dmg`. Confirm that it exists in the release before trying it. Installation, signing/security behavior, microphone and Accessibility permissions, hotkeys, and insertion still require independent real-Mac verification. No Intel Mac installer or compatibility guarantee is offered here.
 
-### Unsigned app installation
-
-Download only from the release linked above and review its notes before proceeding. These builds are unsigned; the Mac app is not notarized. A security warning does not establish that a download is safe.
-
-- **Mac (Apple Silicon):** Open the DMG and try opening KeyStow. If macOS blocks it and you trust the source and choose to continue, open **System Settings > Privacy & Security > Open Anyway**, then confirm **Open**. Allow **Microphone** and **Accessibility** access when requested, or manage them in Privacy & Security. On some older macOS versions, Control-clicking the app in Finder and choosing Open also offers an exception. Device-management policy may prevent overrides. See [Apple's current guidance](https://support.apple.com/en-us/102445).
-- **Windows:** If SmartScreen shows **Windows protected your PC**, review the source. If you trust it and choose to continue, select **More info > Run anyway** where available. Managed-device policy or Smart App Control may block unsigned apps without an override. Do not turn off your security protections globally. See [Microsoft's unsigned-app guidance](https://github.com/MicrosoftDocs/windows-dev-docs/blob/docs/hub/apps/package-and-deploy/smartscreen-reputation.md).
-
-Real-device installation and permission behavior are still being tested; no universal compatibility is claimed.
-
-
 ## Use
 
 - Current source default for uncustomized installs: **hold Right Ctrl** while speaking, then **release** to stop and transcribe.

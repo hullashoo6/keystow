@@ -45,7 +45,7 @@ The workflow targets an Apple Silicon app named `KeyStowMac.dmg`. Confirm that i
 - Model loading and transcription can take time on CPU. Larger models need more storage and memory and are not automatically better for every device or utterance.
 - Existing saved key customizations (including a saved Right Ctrl selection) conservatively retain prior toggle behavior: press once to start, press again to stop. Changing a key now saves the active mode too.
 - `KEYSTOW_TOGGLE=0` explicitly selects hold; `KEYSTOW_TOGGLE=1` selects toggle. Environment mode wins over saved `activation_mode` (`hold` or `toggle`), which wins over the legacy custom-key rule. An explicit `KEYSTOW_HOTKEY` without a mode also retains legacy toggle behavior. Startup does not rewrite preferences.
-- The currently published **v1.0.0 installers still default to toggle**, not this new source default. No new hold-default installer has been published. Check the exact version before following hold instructions.
+- The published **v1.0.1 installers use hold by default for uncustomized installs**. Older **v1.0.0 installers default to toggle**. Both v1.0.1 build jobs passed and both downloads were hash-verified; actual installed microphone, hotkey and paste acceptance remains open. Check the exact version and custom settings before following instructions.
 - Start-at-login is available in the tray menu. Check its actual setting and installed path after upgrades.
 
 Transcription is fallible. Review text before sending or using it. The app does not independently verify that a destination accepted the paste. Clipboard restoration is text-only and can be affected by other apps; do not rely on it to preserve images, files or rich clipboard formats.

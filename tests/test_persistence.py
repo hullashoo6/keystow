@@ -63,3 +63,47 @@ class PersistenceTest(unittest.TestCase):
                         else:module.add_words(3)
                 self.assertEqual(target.read_text(),original)
                 self.assertEqual(list(self.home.iterdir()),[target])
+
+    def test_partial_copy_never_publishes_and_next_launch_retries(self):
+        import shutil
+        old, new = self.home/'.murmur', self.home/'.keystow'
+        old.mkdir()
+        (old/'settings.json').write_text('{"hotkey":"shift_r","future":{"version":2}}')
+        (old/'stats.json').write_text('{"total":12,"days":{}}')
+        original = {p.name:p.read_bytes() for p in old.iterdir()}
+        def partial(source, target):
+            Path(target).mkdir()
+            shutil.copy2(Path(source)/'settings.json', Path(target)/'settings.json')
+            raise OSError('interrupted copy')
+        with patch.object(paths,'_OLD',str(old)), patch.object(paths,'_DIR',str(new)), patch.object(paths,'_FALLBACK',None,create=True):
+            with patch.object(paths.os,'replace',side_effect=OSError('cross-device')), patch.object(paths.shutil,'copytree',side_effect=partial):
+                self.assertEqual(paths.data_dir(),str(old))
+            self.assertFalse(new.exists())
+            self.assertEqual(list(self.home.iterdir()),[old])
+            self.assertEqual({p.name:p.read_bytes() for p in old.iterdir()},original)
+            # All modules must choose the same store even after the fault clears.
+            self.assertEqual(paths.data_dir(),str(old))
+            # Simulate a new process, retaining the actual filesystem.
+            paths._FALLBACK = None
+            with patch.object(paths.os,'replace',side_effect=OSError('cross-device')):
+                self.assertEqual(paths.data_dir(),str(new))
+            self.assertEqual({p.name:p.read_bytes() for p in new.iterdir()},original)
+            self.assertEqual(paths.data_dir(),str(new))
+            self.assertEqual({p.name:p.read_bytes() for p in new.iterdir()},original)
+            self.assertEqual(sorted(p.name for p in self.home.iterdir()),['.keystow','.murmur'])
+
+    def test_copy_publish_failure_uses_legacy_without_partial_destination(self):
+        old, new = self.home/'.murmur', self.home/'.keystow'
+        old.mkdir(); (old/'stats.json').write_text('{"total":12}')
+        with patch.object(paths,'_OLD',str(old)), patch.object(paths,'_DIR',str(new)), patch.object(paths,'_FALLBACK',None,create=True), patch.object(paths.os,'replace',side_effect=OSError('cross-device')), patch.object(paths.os,'rename',side_effect=OSError('publish denied')):
+            self.assertEqual(paths.data_dir(),str(old))
+            self.assertFalse(new.exists())
+            self.assertEqual(list(self.home.iterdir()),[old])
+            self.assertEqual(json.loads((old/'stats.json').read_text())['total'],12)
+
+    def test_settings_update_preserves_unknown_fields(self):
+        target=self.home/'settings.json'
+        target.write_text('{"hotkey":"shift_r","future":{"nested":[1,2]}}')
+        with patch.object(settings,'_PATH',str(target)):
+            settings.set('noise_suppression',False)
+        self.assertEqual(json.loads(target.read_text())['future'],{'nested':[1,2]})

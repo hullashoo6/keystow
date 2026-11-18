@@ -1,8 +1,10 @@
 # Hold-default source change
 
-Source-only work, 2026-11-18. The published v1.0.0 Windows and Mac artifacts
-are unchanged and use the earlier toggle default. No hold-default release or
-site deployment is authorized by this document.
+Implemented 2026-11-18. v1.0.1 was built from `bbb511c` and both platform
+artifacts were independently downloaded and hash-verified. v1.0.0 remains
+unchanged with the earlier toggle default. Actual installed hardware
+acceptance remains open. The page copy below is deployed only after artifact
+verification; this document records the sequence, not new release authority.
 
 ## Mode resolution and upgrade evidence
 
@@ -48,7 +50,7 @@ installed application acceptance remain real-machine checks. A lost OS keyup
 cannot be inferred from silence without changing hold semantics. Do not add
 an arbitrary speech-duration cutoff to hide that limitation.
 
-## Prepared page wording, not deployed
+## Page wording after verified v1.0.1 availability
 
 Apply only when the approved hold-default installer is actually available:
 
@@ -61,18 +63,18 @@ Step 02 body: "Hold Right Ctrl while speaking, then release to stop. Keep your
 destination field focused while it processes. Existing custom settings may
 retain toggle mode. Review the transcript before sending."
 
-Do not change the live page to these words while v1.0.0 toggle is the only
-available installer.
+v1.0.1 is now available separately; v1.0.0 is retained.
 
 ## Deliberate release boundary
 
-The current workflow builds on main source pushes and automatically clobbers
-v1.0.0 assets. Source-only commits must include `[skip ci]`. GitHub documents
+The workflow builds on main source pushes and publishes v1.0.1 assets.
+Source-only commits must include `[skip ci]` to avoid replacing that build. GitHub documents
 this skip for push-triggered workflows; it does not block manual dispatch.
 
-A later approved build can use manual `workflow_dispatch` on an explicitly
-chosen commit, but the current workflow overwrites v1.0.0. Decide version/tag,
-release notes and publication through the owner before running it. Do not
-trigger it as a side effect of this source-only work.
+The approved v1.0.1 build used manual `workflow_dispatch` at `bbb511c`.
+Release creation pins GITHUB_SHA; all release targets were changed to
+v1.0.1 before dispatch, and v1.0.0 was verified unchanged. Future releases
+must deliberately select their version/tag and source instead of silently
+replacing the currently tested artifacts.
 
 Reference: https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs

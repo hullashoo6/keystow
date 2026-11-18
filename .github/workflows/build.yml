@@ -87,6 +87,21 @@ jobs:
     needs: [build, build-mac]
     runs-on: ubuntu-latest
     steps:
+      - name: Create absent exact-commit lightweight tag after dispatch approval
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_sha=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v1.0.2" --jq '.[] | select(.ref == "refs/tags/v1.0.2") | .object.sha')
+          if [ -n "$tag_sha" ]; then
+            test "$tag_sha" = "$GITHUB_SHA"
+          else
+            gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/v1.0.2 -f sha="$GITHUB_SHA"
+          fi
+          tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/v1.0.2" --jq '.object.sha')
+          test "$tag_sha" = "$GITHUB_SHA"
       - uses: actions/checkout@v4
       - name: Download this run's Windows artifact
         uses: actions/download-artifact@v4

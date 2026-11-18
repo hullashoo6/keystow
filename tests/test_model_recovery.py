@@ -67,7 +67,7 @@ class ModelRecoveryJourneyTest(unittest.TestCase):
                 assert controller.transcriber is old_model
                 controller.start_recording()
                 app.processEvents()
-                assert window.record_btn.text() == "Stop and type"
+                assert window.record_btn.text() == ("Stop and type" if window._toggle else "Release to type")
                 controller.stop_recording()
                 controller._worker.join(3)
                 app.processEvents()

@@ -1,31 +1,45 @@
 """Start at login: per-user Run key on Windows, LaunchAgent on macOS."""
 
 import os
+import plistlib
+import tempfile
+from xml.parsers.expat import ExpatError
 import sys
 
 _APP_NAME = "KeyStow"
 
 if sys.platform == "darwin":
     _PLIST = os.path.expanduser("~/Library/LaunchAgents/com.keystow.app.plist")
-    _PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.keystow.app</string>
-  <key>ProgramArguments</key><array><string>{exe}</string></array>
-  <key>RunAtLoad</key><true/>
-</dict>
-</plist>
-"""
-
     def is_enabled() -> bool:
-        return os.path.exists(_PLIST)
+        try:
+            with open(_PLIST, 'rb') as f:
+                data = plistlib.load(f)
+            arguments = data.get('ProgramArguments') if isinstance(data, dict) else None
+            return (isinstance(data, dict) and data.get('Label') == 'com.keystow.app'
+                    and data.get('RunAtLoad') is True
+                    and isinstance(arguments, list) and bool(arguments)
+                    and all(isinstance(arg, str) and arg for arg in arguments))
+        except (OSError, ValueError, ExpatError):
+            return False
 
     def set_enabled(enabled: bool) -> None:
         if enabled:
-            os.makedirs(os.path.dirname(_PLIST), exist_ok=True)
-            with open(_PLIST, "w", encoding="utf-8") as f:
-                f.write(_PLIST_TEMPLATE.format(exe=sys.executable))
+            directory = os.path.dirname(_PLIST)
+            os.makedirs(directory, exist_ok=True)
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='wb', dir=directory,
+                                                 prefix='.keystow-login-', delete=False) as f:
+                    temporary = f.name
+                    plistlib.dump({'Label': 'com.keystow.app',
+                                   'ProgramArguments': [sys.executable],
+                                   'RunAtLoad': True}, f)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temporary, _PLIST)
+            finally:
+                if temporary and os.path.exists(temporary):
+                    os.unlink(temporary)
         else:
             try:
                 os.remove(_PLIST)

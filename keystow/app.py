@@ -37,7 +37,7 @@ class VoiceController:
         self._listener = None
         self._hotkey_down = False
         self._capturing = False
-        self._toggle = config.TOGGLE_MODE
+        self._toggle = settings.toggle_mode()
         self._hotkey_name = settings.get("hotkey", config.HOTKEY)
         self._hotkey = _resolve_hotkey(self._hotkey_name)
         self._label = hotkey_label(self._hotkey_name)
@@ -65,6 +65,9 @@ class VoiceController:
             self._hotkey = _resolve_hotkey(name)
             self._label = hotkey_label(name)
             self._hotkey_down = False
+            # Save mode first, so a new hold-mode key is never mistaken for
+            # a pre-hold-default legacy customization after restart.
+            settings.set("activation_mode", "toggle" if self._toggle else "hold")
             settings.set("hotkey", name)
             self.window.set_hotkey_label(name)
             self.window.set_state(f"Activation key set to [{self._label}].")
@@ -170,16 +173,21 @@ class VoiceController:
     def _on_press(self, key):
         try:
             with self._state_lock:
+                if self._closing:
+                    return
                 if self._capturing:
                     self._capturing = False
                     self.set_hotkey(self._key_name(key))
+                    # Consume capture key repeats until its matching release.
+                    self._hotkey_down = key == self._hotkey
                     return
                 if key != self._hotkey:
                     return
+                if self._hotkey_down:
+                    return  # OS auto-repeat is not a new physical press
+                self._hotkey_down = True
                 if self._toggle:
-                    if not self._hotkey_down:
-                        self._hotkey_down = True
-                        self.toggle_recording()
+                    self.toggle_recording()
                 else:
                     self.start_recording()
         except Exception:
@@ -188,10 +196,13 @@ class VoiceController:
     def _on_release(self, key):
         try:
             with self._state_lock:
+                if self._closing:
+                    return
                 if key != self._hotkey:
                     return
+                was_down = self._hotkey_down
                 self._hotkey_down = False
-                if not self._toggle:
+                if was_down and not self._toggle:
                     self.stop_recording()
         except Exception:
             logging.exception("hotkey release handler failed")
@@ -209,6 +220,7 @@ class VoiceController:
             self._closing = True
             self._phase = "closing"
             self._capturing = False
+            self._hotkey_down = False
             if was_recording:
                 try:
                     self.recorder.stop()  # discard audio on explicit quit

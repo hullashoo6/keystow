@@ -1,4 +1,4 @@
-name: Build Windows installer
+name: Build KeyStow installers
 
 on:
   push:
@@ -39,11 +39,12 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Build installer
         run: iscc installer\setup.iss
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload v1.0.1 installer\installer\KeyStowSetup.exe --clobber || gh release create v1.0.1 installer\installer\KeyStowSetup.exe --target $env:GITHUB_SHA --title "KeyStow v1.0.1" --notes "Private push-to-talk voice typing for Windows. Download KeyStowSetup.exe, run it, and KeyStow appears in your tray. New/default installs: hold Right Ctrl while speaking, release to transcribe and request paste. Existing custom-key settings retain toggle unless explicitly changed. Real-machine acceptance is still pending."
+      - name: Stage Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer/installer/KeyStowSetup.exe
+          if-no-files-found: error
 
   build-mac:
     runs-on: macos-latest
@@ -67,14 +68,42 @@ jobs:
           pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data "models/faster-whisper-base:models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
       - name: Set macOS bundle version
         run: |
-          python -c "import plistlib; p='dist/KeyStow.app/Contents/Info.plist'; d=plistlib.load(open(p,'rb')); d.update(CFBundleShortVersionString='1.0.1', CFBundleVersion='1.0.1'); plistlib.dump(d,open(p,'wb'))"
+          python -c "import plistlib; p='dist/KeyStow.app/Contents/Info.plist'; d=plistlib.load(open(p,'rb')); d.update(CFBundleShortVersionString='1.0.2', CFBundleVersion='1.0.2'); plistlib.dump(d,open(p,'wb'))"
       - name: Create DMG
         run: |
           mkdir -p dist/dmg
           cp -R dist/KeyStow.app dist/dmg/
           hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
-      - name: Publish GitHub Release
+      - name: Stage Mac installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-installer
+          path: dist/KeyStowMac.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: [build, build-mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          pattern: '*-installer'
+          merge-multiple: true
+      - name: Verify both artifacts exist
+        run: |
+          test -s installers/KeyStowSetup.exe
+          test -s installers/KeyStowMac.dmg
+          sha256sum installers/KeyStowSetup.exe installers/KeyStowMac.dmg
+      - name: Publish new patch release without overwriting assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          gh release upload v1.0.1 dist/KeyStowMac.dmg --clobber || gh release create v1.0.1 dist/KeyStowMac.dmg --target "$GITHUB_SHA" --title "KeyStow v1.0.1" --notes "Local voice typing for Windows and Apple Silicon Mac. v1.0.1 introduces hold-to-speak by default for uncustomized installs, preserves legacy custom-key toggle and explicit modes, and fixes interrupted legacy-data migration. Existing custom keys may retain toggle; KEYSTOW_TOGGLE=0 explicitly selects hold. No installed hardware acceptance is claimed. Windows: run KeyStowSetup.exe. Mac: open KeyStowMac.dmg and allow required Microphone and Accessibility permissions. Unsigned/security behavior still requires real-device verification."
+          tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/v1.0.2" --jq '.object.sha')
+          test "$tag_sha" = "$GITHUB_SHA"
+          gh release create v1.0.2 --draft installers/KeyStowSetup.exe installers/KeyStowMac.dmg --verify-tag --title "KeyStow v1.0.2" --notes "Local voice typing for Windows and Apple Silicon Mac. Recovery update: paste-key cleanup and conditional clipboard restoration, best-effort local diagnostic logging, retryable login registration, and safe Mac login-file serialization and replacement. Hold-to-speak remains the default for uncustomized installs; explicit modes and legacy custom keys are preserved. Built and component-tested; installed microphone, global shortcut, paste and real Mac login acceptance remain unverified. Clipboard insertion remains focus-dependent and restoration preserves text only. Download the installer for your platform. Checkout is not enabled yet."
+          gh api "repos/$GH_REPO/releases/tags/v1.0.2" > draft-release.json
+          python installer/verify_release_assets.py draft-release.json installers
+          gh release edit v1.0.2 --draft=false --latest --verify-tag

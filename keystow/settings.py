@@ -45,3 +45,19 @@ def set(key: str, value) -> None:
     finally:
         if temporary and os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def toggle_mode() -> bool:
+    """Resolve mode without rewriting preferences on startup.
+
+    Historically only an explicitly selected hotkey was saved; mode lived in
+    KEYSTOW_TOGGLE. Preserve that legacy custom setup as toggle unless an
+    explicit stored mode or environment override says otherwise.
+    """
+    override = os.environ.get("KEYSTOW_TOGGLE")
+    if override is not None:
+        return override != "0"  # preserve established environment semantics
+    mode = get("activation_mode")
+    if mode in ("hold", "toggle"):
+        return mode == "toggle"
+    return get("hotkey") is not None or bool(os.environ.get("KEYSTOW_HOTKEY"))

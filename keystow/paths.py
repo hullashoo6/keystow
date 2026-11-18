@@ -10,6 +10,7 @@ _DIR = os.path.join(os.path.expanduser("~"), ".keystow")
 # A failed migration must not split settings/stats/logs between directories.
 # Keep using the legacy directory for this process; next launch retries.
 _FALLBACK = None
+_STARTUP_STORAGE_ERROR = None
 
 
 def data_dir() -> str:
@@ -18,7 +19,7 @@ def data_dir() -> str:
     An existing destination always wins. If migration fails, the legacy store
     remains active for this process and is retried on the next launch.
     """
-    global _FALLBACK
+    global _FALLBACK, _STARTUP_STORAGE_ERROR
     identity = (_OLD, _DIR)
     if _FALLBACK == identity:
         return _OLD
@@ -40,5 +41,21 @@ def data_dir() -> str:
                 logging.exception("data migration failed; using legacy directory until restart")
                 _FALLBACK = identity
                 return _OLD
-    os.makedirs(_DIR, exist_ok=True)
+    try:
+        os.makedirs(_DIR, exist_ok=True)
+    except OSError as exc:
+        # Resolve the canonical location even when it is obstructed. Readers
+        # can default and writers still raise; never move/delete user files or
+        # redirect private data into an unexpected temporary/shared directory.
+        _STARTUP_STORAGE_ERROR = exc
+        logging.warning("Local data directory unavailable during initialization: %s", exc)
     return _DIR
+
+
+def startup_storage_error() -> OSError | None:
+    """A detected startup creation failure, not a general writability test.
+
+    Retain this condition for the process: one later successful write does not
+    prove all local storage is healthy. A new process checks initialization anew.
+    """
+    return _STARTUP_STORAGE_ERROR

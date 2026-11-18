@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -82,15 +82,22 @@ jobs:
           if-no-files-found: error
 
   publish:
+    permissions:
+      contents: write
     needs: [build, build-mac]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Download this run's Windows artifact
+        uses: actions/download-artifact@v4
         with:
+          name: windows-installer
           path: installers
-          pattern: '*-installer'
-          merge-multiple: true
+      - name: Download this run's Mac artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-installer
+          path: installers
       - name: Verify both artifacts exist
         run: |
           test -s installers/KeyStowSetup.exe
@@ -100,10 +107,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+        shell: bash
         run: |
+          set -euo pipefail
           tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/v1.0.2" --jq '.object.sha')
           test "$tag_sha" = "$GITHUB_SHA"
-          gh release create v1.0.2 --draft installers/KeyStowSetup.exe installers/KeyStowMac.dmg --verify-tag --title "KeyStow v1.0.2" --notes "Local voice typing for Windows and Apple Silicon Mac. Recovery update: paste-key cleanup and conditional clipboard restoration, best-effort local diagnostic logging, retryable login registration, and safe Mac login-file serialization and replacement. Hold-to-speak remains the default for uncustomized installs; explicit modes and legacy custom keys are preserved. Built and component-tested; installed microphone, global shortcut, paste and real Mac login acceptance remain unverified. Clipboard insertion remains focus-dependent and restoration preserves text only. Download the installer for your platform. Checkout is not enabled yet."
+          gh release create v1.0.2 --draft installers/KeyStowSetup.exe installers/KeyStowMac.dmg --verify-tag --title "KeyStow v1.0.2" --notes "Local voice typing for Windows and Apple Silicon Mac. Recovery update: paste-key cleanup and conditional clipboard restoration, best-effort local diagnostic logging, retryable login registration, safe Mac login-file serialization and replacement, and bounded startup-storage recovery with a visible warning and retry after user repair. Hold-to-speak remains the default for uncustomized installs; explicit modes and legacy custom keys are preserved. Built and component-tested; installed microphone, global shortcut, paste and real Mac login acceptance remain unverified. Clipboard insertion remains focus-dependent and restoration preserves text only. Download the installer for your platform. These downloads provide the installers directly. No payment is collected."
           gh api "repos/$GH_REPO/releases/tags/v1.0.2" > draft-release.json
           python installer/verify_release_assets.py draft-release.json installers
           gh release edit v1.0.2 --draft=false --latest --verify-tag

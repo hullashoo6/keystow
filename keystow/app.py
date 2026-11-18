@@ -266,7 +266,7 @@ class VoiceController:
                         type_text(text)
                     except Exception:
                         logging.exception("typing failed")
-                        result = "Couldn't paste into the other app. Your transcript is shown below."
+                        result = "Paste or clipboard cleanup failed. Text may already be inserted; check the destination before retrying. Your transcript is shown below."
                     else:
                         verb = "Press" if self._toggle else "Hold"
                         result = f"Paste requested. {verb} [{self._label}] to speak again."

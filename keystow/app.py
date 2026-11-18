@@ -61,14 +61,21 @@ class VoiceController:
         with self._state_lock:
             if self._phase != "idle":
                 return
+            key = _resolve_hotkey(name)
+            # Persist before activating the new key. A failed write must not
+            # leave the control/controller claiming a saved key that differs.
+            try:
+                settings.set("activation_mode", "toggle" if self._toggle else "hold")
+                settings.set("hotkey", name)
+            except OSError:
+                logging.exception("activation key could not be saved")
+                self.window.set_hotkey_label(self._hotkey_name)
+                self.window.set_state("Could not save the activation key. Your previous key is still selected.")
+                return
             self._hotkey_name = name
-            self._hotkey = _resolve_hotkey(name)
+            self._hotkey = key
             self._label = hotkey_label(name)
             self._hotkey_down = False
-            # Save mode first, so a new hold-mode key is never mistaken for
-            # a pre-hold-default legacy customization after restart.
-            settings.set("activation_mode", "toggle" if self._toggle else "hold")
-            settings.set("hotkey", name)
             self.window.set_hotkey_label(name)
             self.window.set_state(f"Activation key set to [{self._label}].")
 

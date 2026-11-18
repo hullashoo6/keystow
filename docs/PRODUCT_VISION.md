@@ -19,7 +19,7 @@ KeyStow is a local voice-typing utility, not a claim of feature parity with Wisp
 
 1. Install and open KeyStow; the bundled base model loads locally.
 2. Focus an editable field in another app.
-3. Press the configured shortcut once to start, speak, then press again to stop. Hold mode is an optional configuration.
+3. Hold the configured shortcut while speaking, then release to stop (v1.0.1 uncustomized default). Explicit toggle and legacy custom-key settings may retain press-once/start, press-again/stop behavior.
 4. Wait for local transcription. Do not accept another recording or switch models during processing.
 5. Paste the result once. Show the transcript for recovery if insertion fails.
 6. Return to a clear ready state, or explain the next recovery action.

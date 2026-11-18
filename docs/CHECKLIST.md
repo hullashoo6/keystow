@@ -1,16 +1,17 @@
 # KeyStow living acceptance checklist
 
-Updated 2026-11-17. This is a record of evidence, not a feature list.
+Updated 2026-11-18. This is a record of evidence, not a feature list.
 
 Labels: **OPEN** = insufficient evidence; **COMPONENT** = isolated logic or offscreen check; **HARDWARE** = real OS/device journey; **RELEASE** = actual downloaded installer journey. Never promote a component result to a hardware or release claim.
 
 ## Current truth
 
-- Baseline inspected: `3178afb`.
-- Startup regression reproduced: `run_app` discarded the controller and never called `start()`. Introduced by `3bf5d53` (tray UI rewrite), not the rename. Earlier source started correctly.
-- Startup fix verified on public main at `71a66de`; startup regression file verified byte-identical at `210f231`. Local check fails on baseline and passes on fixed code. Installer build `44125878593` is still queued, not accepted.
-- Latest installer build/release is not yet accepted. A Windows asset exists; macOS asset was absent at baseline. Asset existence is not installation evidence.
-- Real Windows and macOS microphone/hotkey/paste journeys remain OPEN. Earlier owner V1 use does not certify later changes.
+- v1.0.1 source/tag is `bbb511c2e9a05122196bd141b5e841e1042aa98f`. Both packaging jobs passed in [run44243349123](https://github.com/hullashoo6/keystow/actions/runs/44243349123). Both complete public asset downloads returned 200 and matched GitHub SHA256 digests. This is packaging/download evidence, NOT installed acceptance.
+- [v1.0.1 release](https://github.com/hullashoo6/keystow/releases/tag/v1.0.1): Windows292238320bytes, SHA256 `24cde89cf38feba67464423fe1131ad7e4a05e069742678a3b244505f1be6003`; Mac235717838bytes, SHA256 `017f57a49329c8b731e28f824a54eff91e133f292c436aa5209e38dc6e2af486`. v1.0.0 retained separately.
+- Uncustomized v1.0.1 defaults to HOLD, preserving explicit modes/env and conservative legacy custom-key toggle. Startup, debounce, mode persistence and staged legacy-data migration have component coverage. Installed upgrade behavior remains OPEN.
+- Engineering source snapshot `68ddeb8284849739ccfb79cce48059737233645d` on `engineering/clipboard-log-recovery`: fresh public clone 61 tests passed in 2.553s on 2026-11-18 at 19:10 IST; compile/whitespace passed; zero branch workflows. Clipboard cleanup/conditional restore, best-effort logging, autostart retry/atomic Mac plist, and startup-storage recovery are COMPONENT evidence only. They are NOT in main or downloaded v1.0.1. The five-file startup patch is cumulative across `3350579..68ddeb8`, not the latest single-file commit alone.
+- Main at `645d6f5eb8b4a482d5bad6745bad5e31afbd998b` contains the current page. [Pages run 44302009038](https://github.com/hullashoo6/keystow/actions/runs/44302009038) passed; [live page](https://hullashoo6.github.io/keystow/) exact served bytes and desktop 1440/mobile 390 pixels checked 2026-11-18 at 17:47 IST. Both direct installer links returned 200. Page mechanics state that these buttons download installers directly and collect no payment; the owner-set $5 lifetime hero/card remain unchanged. Footer and install-override guidance remain removed. Preserve this newer page and README during reconciliation.
+- Real Windows/macOS microphone, global shortcut, external paste, permission recovery and installed-release journeys remain OPEN. No owner hardware pass is inferred from an attempted install or source checks.
 
 ## Ordered work and acceptance
 
@@ -74,14 +75,14 @@ The startup check substitutes the controller and external side effects. It does 
 
 Update checked boxes and this log only after the evidence exists. A failed check is useful evidence and must remain visible until fixed and rechecked. After each completed step, report the actual result and next risk to the project planning conversation. Hourly review is a backstop, not permission to idle while useful work is ready.
 
-## Local follow-up evidence awaiting public commit
+## Component evidence now in public source
 
 - Threaded controller check holds inference on an event while repeated capture/stop/hotkey/model-switch requests arrive: only one capture/worker/paste occurs.
 - Forced inference failure followed by a successful next session pastes only recovered text. Paste failure keeps a selectable transcript; a statistics disk error does not suppress usable text.
 - Real Qt window plus controller: optional-model load failure restores visible base selection, controls re-enable, next dictation uses the prior model (peripheral I/O substituted).
 - Quit during held inference discards late output and rejects new work. Quit during recording stops/discards capture. Real Qt event loop waits for a running QThread before exit. A running model download is not forcibly cancelled; shutdown may wait for its network timeout.
 - Real Qt listening/processing/error pixels inspected after changes: clear Stop and type action, transparent labels, active-state controls disabled, selectable recovery transcript, error points below. Rendered states were injected; this is not real microphone evidence.
-- Remaining observed claims defects: README free-forever/works-everywhere/two-files copy and unverified Intel-Mac claim; page polished-anywhere claim and Mac download before confirmed asset. Corrections remain open.
+- Historical copy defects were corrected: README no longer claims universal app/Intel Mac support; both release assets exist; live page has dual platform CTAs. Hardware/platform acceptance is still open.
 - Local environment: Python 3.10.12, PySide6 6.8.3, Linux offscreen. Checks: `QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v`; `python -m compileall -q keystow tests`. Actual audio, OS keyboard, clipboard and installed-release journeys remain OPEN.
 
 ## Additional evidence after the first follow-up bundle
@@ -90,4 +91,21 @@ Update checked boxes and this log only after the evidence exists. A failed check
 - Real temporary filesystem: old-data migration, existing-destination preservation and copy fallback passed. Valid JSON arrays reproduced settings/stats startup crashes; type validation and atomic same-directory writes fixed locally. Injected replacement failure retains the last-good file and cleans temporary files. Installed upgrades remain OPEN.
 - Real recorder logic with controlled stream: start failure closes the partly initialized stream; stop failure closes it; audio frames are cleared after delivery/failure; immediate retry succeeds. These are stream-ownership component checks, not PortAudio hardware evidence.
 - README/page corrections rendered in Chrome at desktop and 390px mobile. No overflow/crop found. These are local previews, not proof of deployed page state.
-- Public writing is serialized behind the startup installer run; local patches/checks are not automatically public or shipped.
+- Public branch and released-binary evidence must stay separate. The current engineering recovery changes are branch-only; no installer rebuild was triggered for them.
+
+## 2026-11-18 recovery findings and remaining boundaries
+
+- Clipboard dispatch failure reproduced a held modifier and temporary text left behind; unconditional restoration overwrote newer clipboard text. Branch fix tracks owned keys for finally cleanup and restores old text only while temporary text still matches. Error preserves transcript and warns that text may already be inserted. Non-atomic compare/write race, text-only clipboard preservation and focus-dependent target remain limitations.
+- A file occupying the logs directory blocked startup. Branch logging setup is best effort, local-only and retryable after storage repair; native fault trace failure does not disable ordinary logging. That earlier logging-only patch did not fix an inaccessible whole data directory during imports; the separate startup-storage patch below addresses that reproduced obstruction.
+- First-run autostart registration OSError wrongly saved initialized=True. Branch fix marks initialization only on success and retries a later launch without overriding an explicit later opt-out. Windows installs register HKCU Run; Mac registers LaunchAgent on first successful app launch. This is login, not wake-from-sleep or crash restart. Real OS behavior is unverified.
+- Short-speech diagnostic: same cached offline base CPU-int8 model rejected a genuine0.32s word due to no_speech_prob>.6; padding changed confidence. A44-case artificial word/context matrix also included wrong raw outputs rejected by filters. Three repeated speech/silence sequences showed no stale-text leakage. These clipped single-speaker English samples are NOT an accuracy benchmark and do NOT justify threshold/padding changes. Independent natural short-speech fixtures, silence/noise controls and real mic journeys are still needed.
+
+## 2026-11-18 startup-storage recovery and v1.0.2 gate
+
+- COMPONENT: a real regular file at the intended home `.keystow` path reproduced an import-time startup crash. The fix retains that canonical path and obstruction, does not delete/rename it or redirect data, and lets the UI open with a persistent warning and word counts unavailable.
+- COMPONENT: actual temporary-home subprocess checks cover blocked-file startup, visible warning plus synthetic transcript, failed noise-setting save, user repair, successful retry and fresh-process saved-value readback. Injected mkdir permission denial and unobstructed startup are separate cases. Actual offscreen Qt 530x700 and 360x700 pixels were inspected; narrow warning clipping was fixed. This is not installed or microphone evidence.
+- COMPONENT: failed noise writes restore the last saved value. Hotkey first/second persistence-write errors preserve the prior active key and UI; autostart OS failure is visible and retryable. The model selector has no settings write. No general later-storage health check, backup or automatic model repair is claimed.
+- COMPONENT: simulated macOS LaunchAgent construction is parsed with plistlib and written atomically. Real launchd acceptance remains OPEN.
+- COMPONENT: v1.0.2 release-asset verifier tests cover wrong names, upload state, zero metadata size, mismatched SHA256, missing/extra assets, wrong tag/non-draft and a passing pair. The actual new CI path remains unexecuted.
+- RELEASE GATE, not completed evidence: preserve the newer page/README, verify the exact combined tree from a fresh public clone, record full tests/compile/whitespace/YAML/workflow checks, exact SHA and zero v1.0.1 references in the retargeted build workflow, and compare prior release identities/assets against the recorded baseline. Tonight requires the pre-dispatch bundle and explicit owner GO before any dispatch.
+- The proposed workflow stages artifacts from both current-run builds, creates one draft with both assets and no clobber, verifies exact names/upload state/nonempty sizes/SHA256 against staged files, and only then undrafts. Workflow source review and verifier tests are not evidence that this path has run successfully. Failures hold; prior release assets stay untouched.

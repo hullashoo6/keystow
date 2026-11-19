@@ -1,0 +1,9 @@
+{
+  "api_url": "https://api.github.com/repos/openai/whisper/contents/tests/jfk.flac",
+  "download_url": "https://raw.githubusercontent.com/openai/whisper/main/tests/jfk.flac",
+  "github_blob_sha": "e44b7c13897eae7f78beb220c61fe77429a3961d",
+  "source_sha256": "63a4b1e4c1dc655ac70961ffbf518acd249df237e5a0152faae9a4a836949715",
+  "sample_sha256": "e16f7d2531a9e53321386be7b2089cbf9abe45f094bf7478c7923d8d96fb1042",
+  "conversion": "ffmpeg mono float32 PCM 16000Hz, np.save",
+  "content": "John F. Kennedy public inaugural speech test fixture, not user audio"
+}

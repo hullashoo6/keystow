@@ -4,6 +4,8 @@ import os
 import sys
 
 import numpy as np
+from .numpy_guard import verify_dependency, validate_waveform
+verify_dependency()
 from faster_whisper import WhisperModel
 
 from . import config, denoise
@@ -42,9 +44,11 @@ class Transcriber:
         silence/background noise, and low-confidence segments are dropped
         instead of typed.
         """
+        validate_waveform(audio)
         if audio.size == 0:
             return ""
         audio = denoise.denoise_if_enabled(audio)  # strip fan/ground noise first
+        validate_waveform(audio)
         segments, _info = self._model.transcribe(
             audio,
             language=self._language,

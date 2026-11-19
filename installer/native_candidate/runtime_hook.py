@@ -11,6 +11,28 @@ if '--candidate-probe' in sys.argv or '--candidate-code-substitution' in sys.arg
           substitute='--candidate-code-substitution' in sys.argv)
     raise SystemExit(0)
 
+if '--candidate-portaudio-probe' in sys.argv:
+    import hashlib, json, os
+    import sounddevice
+    base = Path(sys._MEIPASS).resolve()
+    variant = os.environ['CANDIDATE_PORTAUDIO_VARIANT']
+    assert sys.platform == 'win32' and variant in ('default', 'asio')
+    name = 'libportaudio64bit' + ('-asio' if variant == 'asio' else '') + '.dll'
+    expected = base/'_sounddevice_data/portaudio-binaries'/name
+    loaded = Path(sounddevice._libname).resolve()
+    assert loaded == expected.resolve(), 'PortAudio did not load retained bundled DLL'
+    version, description = sounddevice.get_portaudio_version()
+    data = {'variant':variant, 'platform':sys.platform,
+        'loaded_relative_path':loaded.relative_to(base).as_posix(),
+        'sha256':hashlib.sha256(loaded.read_bytes()).hexdigest(),
+        'native_version':version, 'native_description':description,
+        'native_call_pass':True, 'microphone_acceptance':False}
+    out = Path(os.environ['CANDIDATE_EVIDENCE_DIR'])
+    (out/('portaudio-'+variant+'.json')).write_text(
+        json.dumps(data, indent=2), encoding='utf-8')
+    print(json.dumps(data))
+    raise SystemExit(0)
+
 if '--candidate-font-probe' in sys.argv:
     import json, os
     from PySide6 import QtGui

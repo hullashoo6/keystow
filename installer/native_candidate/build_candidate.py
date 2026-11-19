@@ -143,6 +143,17 @@ def tests_and_build(model):
     run(args,'pyinstaller')
     dist = WORK/'dist/KeyStowCandidate'
     exe = dist/('KeyStowCandidate.exe' if sys.platform=='win32' else 'KeyStowCandidate')
+    from portaudio_payload import filter_portaudio
+    assert md.version('sounddevice') == '0.5.6', 'Unreviewed sounddevice loader'
+    filter_portaudio(dist, sys.platform, platform.machine(), save)
+    if sys.platform == 'win32':
+        for variant in ('default', 'asio'):
+            audio_env = dict(env, CANDIDATE_EVIDENCE_DIR=str(EVIDENCE),
+                             CANDIDATE_PORTAUDIO_VARIANT=variant)
+            audio_env.pop('SD_ENABLE_ASIO', None)
+            if variant == 'asio':
+                audio_env['SD_ENABLE_ASIO'] = '1'
+            run([exe,'--candidate-portaudio-probe'], 'portaudio-'+variant, audio_env)
     run([exe,'--candidate-probe'], 'frozen-inference', env)
     run([exe,'--candidate-code-substitution'], 'frozen-code-substitution', env)
     for matching_manifest in (False, True):
@@ -165,6 +176,12 @@ def tests_and_build(model):
        LOCALAPPDATA=str(home/'AppData/Local'), KEYSTOW_MODEL='base',
        CANDIDATE_EVIDENCE_DIR=str(EVIDENCE), QT_QPA_PLATFORM='offscreen',
        HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1')
+    # Only the offscreen smoke subprocesses use the runner's installed fonts.
+    # Do not bundle/install fonts or change the normal application environment.
+    if sys.platform == 'win32':
+        font_dir = Path(os.environ['WINDIR'])/'Fonts'
+        assert font_dir.is_dir(), 'Windows smoke font directory is missing'
+        env['QT_QPA_FONTDIR'] = str(font_dir)
     for mode, command in (
         ('source', [sys.executable, HERE/'runtime_hook.py', '--candidate-font-probe']),
         ('frozen', [exe, '--candidate-font-probe'])):
@@ -184,7 +201,7 @@ def tests_and_build(model):
 
 
 def native_inventory(dist,exe):
-    entries=[]; native=[]; linked_bad=[]
+    entries=[]; native=[]; linked_bad=[]; foreign_native=[]
     for p in sorted(dist.rglob('*')):
         name=p.relative_to(dist).as_posix()
         assert not BAD.search(name), 'Forbidden filename: '+name
@@ -200,6 +217,11 @@ def native_inventory(dist,exe):
             save('native-input-current.json', {'path':name, 'magic_hex':magic.hex(),
                  'platform':sys.platform, 'bytes':p.stat().st_size, 'sha256':digest(p)})
             print('Native input:', name, magic.hex(), sys.platform, flush=True)
+        if magic[:2]==b'MZ' and sys.platform != 'win32':
+            foreign_native.append({'path':name, 'format':'PE',
+                'sha256':digest(p), 'bytes':p.stat().st_size,
+                'native_links_inspected':False})
+            continue
         if magic[:2]==b'MZ':
             import pefile
             pe=pefile.PE(str(p),fast_load=True)
@@ -209,6 +231,11 @@ def native_inventory(dist,exe):
             native.append({'path':name,'format':'PE','machine':hex(pe.FILE_HEADER.Machine),'dependencies':deps})
             pe.close()
         elif magic in (b'\xcf\xfa\xed\xfe',b'\xce\xfa\xed\xfe',b'\xfe\xed\xfa\xcf',b'\xfe\xed\xfa\xce',b'\xca\xfe\xba\xbe',b'\xbe\xba\xfe\xca'):
+            if sys.platform != 'darwin':
+                foreign_native.append({'path':name, 'format':'Mach-O',
+                    'magic_hex':magic.hex(), 'sha256':digest(p),
+                    'bytes':p.stat().st_size, 'native_links_inspected':False})
+                continue
             arch=subprocess.check_output(['lipo','-archs',str(p)],text=True).strip()
             deps=subprocess.check_output(['otool','-L',str(p)],text=True).splitlines()[1:]
             native.append({'path':name,'format':'Mach-O','architectures':arch,'dependencies':deps})
@@ -216,7 +243,10 @@ def native_inventory(dist,exe):
     assert native, 'No native objects inspected'
     save('native-file-inventory.json', {'regular_files':sum(e['kind']=='file' for e in entries),
          'symlinks':sum(e['kind']=='symlink' for e in entries),'entries':entries})
-    save('native-link-inventory.json',{'native_objects':len(native),'objects':native,'forbidden_links':linked_bad})
+    save('native-link-inventory.json',{'native_objects':len(native),
+         'objects':native,'forbidden_links':linked_bad,
+         'foreign_native_objects':foreign_native,
+         'complete':not foreign_native})
     assert not linked_bad, 'Forbidden native dependency'
     from PyInstaller.archive.readers import CArchiveReader
     reader=CArchiveReader(str(exe))
@@ -225,12 +255,18 @@ def native_inventory(dist,exe):
     modules=sorted(reader.open_embedded_archive(pyzs[0]).toc)
     save('frozen-module-inventory.json',{'complete':True,'modules':modules})
     assert not [m for m in modules if BAD.search(m)], 'Forbidden frozen module'
+    # Report every file and the frozen modules before failing the audit.
+    # Foreign objects remain unresolved, never silently accepted or removed.
+    assert not foreign_native, 'Foreign native objects have uninspected links'
 
 
 def seal():
     # Fixed allowlist only. Never upload build roots, environment, HOME, git data,
     # downloaded wheels or credentials. Upload only enumerated evidence files.
     allowed={
+      'portaudio-before.json','portaudio-after.json','portaudio-filter.json',
+      'portaudio-default.json','portaudio-asio.json',
+      'portaudio-default.txt','portaudio-asio.txt',
       'native-input-current.json','font-probe-source.json','font-probe-frozen.json',
       'font-probe-source.txt','font-probe-frozen.txt',
       'identity.json','build-tools.txt','download-upstream.txt','metadata-reconciliation.json',

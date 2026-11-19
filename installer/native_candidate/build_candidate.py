@@ -10,7 +10,7 @@ HERE = Path(__file__).resolve().parent
 WORK = ROOT / 'candidate-work'
 EVIDENCE = ROOT / 'candidate-evidence'
 UPLOAD = ROOT / 'candidate-upload'
-ARCHIVE_CAP = 220 * 1024 * 1024
+ARCHIVE_CAP = (250 if sys.platform == 'win32' else 220) * 1024 * 1024
 EVIDENCE_CAP = 10 * 1024 * 1024
 UPSTREAM_SHA = '79a66ad50688c0b794dd501dc340a736992a6342f7f95e5811be60b5224a26a7'
 BAD = re.compile(r'(^|[/\\.])av([/\\.]|$)|(?:avcodec|avformat|avutil|avfilter|avdevice|swresample|swscale|postproc|ffmpeg|virtualkeyboard)', re.I)

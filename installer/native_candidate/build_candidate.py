@@ -165,6 +165,11 @@ def tests_and_build(model):
        LOCALAPPDATA=str(home/'AppData/Local'), KEYSTOW_MODEL='base',
        CANDIDATE_EVIDENCE_DIR=str(EVIDENCE), QT_QPA_PLATFORM='offscreen',
        HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1')
+    for mode, command in (
+        ('source', [sys.executable, HERE/'runtime_hook.py', '--candidate-font-probe']),
+        ('frozen', [exe, '--candidate-font-probe'])):
+        font_env = dict(env, CANDIDATE_FONT_MODE=mode)
+        run(command, 'font-probe-'+mode, font_env)
     run([exe,'--candidate-ui-smoke'],'actual-entrypoint-ui',env)
     native_inventory(dist,exe)
     (dist/'NOT-FOR-RELEASE.txt').write_text(
@@ -189,6 +194,12 @@ def native_inventory(dist,exe):
         entries.append({'path':name,'kind':'file','bytes':p.stat().st_size,'sha256':digest(p)})
         with p.open('rb') as f:magic=f.read(4)
         deps=[]
+        if magic[:2]==b'MZ' or magic in (b'\xcf\xfa\xed\xfe',b'\xce\xfa\xed\xfe',b'\xfe\xed\xfa\xcf',b'\xfe\xed\xfa\xce',b'\xca\xfe\xba\xbe',b'\xbe\xba\xfe\xca'):
+            # Persist the exact input before any parser/tool can fail. This is
+            # diagnostic evidence, not permission to skip an unexpected format.
+            save('native-input-current.json', {'path':name, 'magic_hex':magic.hex(),
+                 'platform':sys.platform, 'bytes':p.stat().st_size, 'sha256':digest(p)})
+            print('Native input:', name, magic.hex(), sys.platform, flush=True)
         if magic[:2]==b'MZ':
             import pefile
             pe=pefile.PE(str(p),fast_load=True)
@@ -220,6 +231,8 @@ def seal():
     # Fixed allowlist only. Never upload build roots, environment, HOME, git data,
     # downloaded wheels or credentials. Upload only enumerated evidence files.
     allowed={
+      'native-input-current.json','font-probe-source.json','font-probe-frozen.json',
+      'font-probe-source.txt','font-probe-frozen.txt',
       'identity.json','build-tools.txt','download-upstream.txt','metadata-reconciliation.json',
       'repack-adapted.txt','wheel-identity.json','resolve.json','install-target.txt','pip-check.txt',
       'installed-dependencies.json','model-contract.json','fixture-source.json',

@@ -4,6 +4,15 @@ No effect without explicit candidate flags. No network, publish or account tools
 from pathlib import Path
 import sys
 
+# This Windows candidate intentionally ships only non-ASIO PortAudio.
+# Ignore an inherited ASIO selection so normal microphone startup still works.
+if sys.platform == "win32":
+    import os
+    if "SD_ENABLE_ASIO" in os.environ:
+        os.environ.pop("SD_ENABLE_ASIO")
+        print("KeyStow candidate: ASIO is unavailable; using standard Windows audio APIs.",
+              file=sys.stderr)
+
 if '--candidate-probe' in sys.argv or '--candidate-code-substitution' in sys.argv:
     from probe import check
     base=Path(sys._MEIPASS)
@@ -16,8 +25,8 @@ if '--candidate-portaudio-probe' in sys.argv:
     import sounddevice
     base = Path(sys._MEIPASS).resolve()
     variant = os.environ['CANDIDATE_PORTAUDIO_VARIANT']
-    assert sys.platform == 'win32' and variant in ('default', 'asio')
-    name = 'libportaudio64bit' + ('-asio' if variant == 'asio' else '') + '.dll'
+    assert sys.platform == 'win32' and variant == 'default'
+    name = 'libportaudio64bit.dll'
     expected = base/'_sounddevice_data/portaudio-binaries'/name
     loaded = Path(sounddevice._libname).resolve()
     assert loaded == expected.resolve(), 'PortAudio did not load retained bundled DLL'

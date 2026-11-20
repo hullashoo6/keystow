@@ -1,6 +1,7 @@
 """KeyStow UI: lives in the system tray, with a small window on demand (PySide6)."""
 
 import sys
+import os
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
@@ -311,6 +312,11 @@ class MainWindow(QMainWindow):
         self._noise_saved = settings.get("noise_suppression", True)
         self.noise_box.setChecked(self._noise_saved)
         self.noise_box.setToolTip("Cleans up mic noise before transcribing. Leave on.")
+        if os.environ.get("KEYSTOW_PRIVATE_TEST_NO_DENOISE") == "1":
+            self.noise_box.setChecked(False)
+            self.noise_box.setEnabled(False)
+            self.noise_box.setText("Noise suppression unavailable in this private test")
+            self.noise_box.setToolTip("This private test retains ordinary dictation but omits the optional denoiser.")
         self.noise_box.toggled.connect(self._save_noise_preference)
         opts.addWidget(self.noise_box)
         opts.addStretch()

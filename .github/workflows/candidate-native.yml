@@ -59,10 +59,12 @@ jobs:
            dmg=root/'KeyStow-Mac-AppleSilicon-Test.dmg';run(['hdiutil','create','-volname','KeyStow Mac Test','-srcfolder',dmgs,'-ov','-format','UDZO',dmg])
            attach=run(['hdiutil','attach','-nobrowse','-readonly','-plist',dmg]);mount=next(x['mount-point'] for x in plistlib.loads(attach['stdout'].encode())['system-entities'] if 'mount-point' in x)
            installed=root/'installed Mac test é';shutil.copytree(Path(mount)/app.name,installed,symlinks=True);run(['hdiutil','detach',mount])
+           run(['xattr','-w','com.apple.quarantine','0083;00000000;KeyStowTest;',installed])
+           (ev/'gatekeeper-assessment.json').write_text(json.dumps(run(['spctl','--assess','--type','execute','--verbose=4',installed],False),indent=2))
            env=dict(os.environ,QT_QPA_PLATFORM='offscreen',PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(ev))
            probes={}
            for name,arg in [('inference','--candidate-probe'),('integrity','--candidate-code-substitution'),('ready','--candidate-ui-smoke')]:
-            r=subprocess.run([str(installed/'Contents/MacOS/KeyStowCandidate'),arg],env=env,capture_output=True,text=True,timeout=180);probes[name]={'exit':r.returncode,'stdout':r.stdout[-2000:],'stderr':r.stderr[-2000:]};assert r.returncode==0,name
+            r=subprocess.run([str(installed/'Contents/MacOS/KeyStowCandidate'),arg],env=env,capture_output=True,text=True,timeout=180);probes[name]={'exit':r.returncode,'stdout':r.stdout[-8000:],'stderr':r.stderr[-8000:]};(ev/'mounted-dmg-probes.json').write_text(json.dumps(probes,indent=2));print(json.dumps(probes[name]),flush=True);assert r.returncode==0,name
            (ev/'mounted-dmg-probes.json').write_text(json.dumps(probes,indent=2))
            # Quarantine and Gatekeeper assessment reflect downloaded unsigned delivery.
            run(['xattr','-w','com.apple.quarantine','0083;00000000;KeyStowTest;',installed])

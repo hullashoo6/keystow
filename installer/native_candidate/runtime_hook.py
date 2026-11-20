@@ -3,6 +3,8 @@ No effect without explicit candidate flags. No network, publish or account tools
 """
 from pathlib import Path
 import sys
+import os
+os.environ["KEYSTOW_PRIVATE_TEST_NO_DENOISE"] = "1"
 
 # This Windows candidate intentionally ships only non-ASIO PortAudio.
 # Ignore an inherited ASIO selection so normal microphone startup still works.
@@ -12,6 +14,24 @@ if sys.platform == "win32":
         os.environ.pop("SD_ENABLE_ASIO")
         print("KeyStow candidate: ASIO is unavailable; using standard Windows audio APIs.",
               file=sys.stderr)
+
+if '--candidate-pynput-source-probe' in sys.argv:
+    import json
+    import pynput
+    root = Path(pynput.__file__).resolve()
+    expected = (Path(sys._MEIPASS)/'pynput/__init__.py').resolve()
+    assert root == expected, 'pynput is not using replaceable external source'
+    marker = getattr(pynput, 'KEYSTOW_REPLACEMENT_PROBE', None)
+    assert marker == os.environ.get('CANDIDATE_PYNPUT_REPLACEMENT_MARKER')
+    assert pynput.keyboard.Controller is not None
+    out = Path(os.environ['CANDIDATE_EVIDENCE_DIR'])
+    result = {'external_source': str(root), 'replacement_marker': marker,
+              'keyboard_module': pynput.keyboard.Controller.__module__,
+              'actual_input_events_sent': False, 'device_acceptance': False}
+    label = 'pynput-replacement' if marker else 'pynput-external-source'
+    (out/(label+'.json')).write_text(json.dumps(result, indent=2))
+    print(json.dumps(result))
+    raise SystemExit(0)
 
 if '--candidate-probe' in sys.argv or '--candidate-code-substitution' in sys.argv:
     from probe import check

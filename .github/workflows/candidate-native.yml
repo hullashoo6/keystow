@@ -1,4 +1,4 @@
-name: KeyStow corrected private candidate native validation
+name: Verify actual corrected private draft downloads
 on:
   workflow_dispatch:
 permissions:
@@ -19,66 +19,33 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install pefile==2023.2.7 pyinstaller==6.16.0
-      - name: Prepare distinct candidate, validate natively, upload only to new held draft
+      - name: Download and verify both corrected draft assets without changing either draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python - <<'PY'
-          import os,json,subprocess,pathlib,hashlib,urllib.request,zipfile,sys,shutil
-          root=pathlib.Path.cwd();out=root/'diagnostic-evidence';out.mkdir()
-          draft=json.loads(subprocess.check_output(['gh','api','repos/hullashoo6/keystow/releases/452144563']))
-          assert draft['draft'] and draft['tag_name']=='private-owner-test-20261120'
-          name='PRIVATE-Windows-NO-DENOISE-436e575a97fb4967bbddf5d126f448ca1f02f17e.zip'
-          asset=next(x for x in draft['assets'] if x['name']==name)
-          req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/octet-stream'})
-          with urllib.request.urlopen(req,timeout=180) as response:data=response.read()
-          sha=hashlib.sha256(data).hexdigest();assert sha=='1eea311f4e4d6e0c33ba6b428fee5f191547d767b11cc40046820f36873a243f'
-          archive=root/'isolated-original.zip';archive.write_bytes(data)
-          corrected=root/'KeyStow-PRIVATE-CORRECTED-NO-CUDNN-436e575.zip'
-          with zipfile.ZipFile(archive) as a,zipfile.ZipFile(corrected,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as b:
-              for i in a.infolist():
-                  if i.filename.endswith('/_internal/ctranslate2/cudnn64_9.dll'):continue
-                  b.writestr(i,a.read(i.filename))
-          with zipfile.ZipFile(archive) as a,zipfile.ZipFile(corrected) as b:
-              aa={n:hashlib.sha256(a.read(n)).hexdigest() for n in a.namelist()};bb={n:hashlib.sha256(b.read(n)).hexdigest() for n in b.namelist()}
-              assert set(aa)-set(bb)=={'KeyStowCandidate/_internal/ctranslate2/cudnn64_9.dll'} and not set(bb)-set(aa)
-              assert all(aa[n]==v for n,v in bb.items()) and b.testzip() is None
-          archive_to_extract=corrected
-          work=root/'isolated-copy';work.mkdir()
-          with zipfile.ZipFile(archive_to_extract) as z:
-              assert z.testzip() is None
-              assert all(not pathlib.PurePosixPath(n).is_absolute() and '..' not in pathlib.PurePosixPath(n).parts for n in z.namelist())
-              z.extractall(work)
-          dist=work/'KeyStowCandidate';exe=dist/'KeyStowCandidate.exe'
-          removed_sha='9edbcdff73b0af070eb160b2ce66e59feca04aa017351d8eedcc5e8e149967d2'
-          intel=dist/'_internal/ctranslate2/libiomp5md.dll';assert hashlib.sha256(intel.read_bytes()).hexdigest()=='982233366b0afcda1e0f55a0b134097e35b779613f54ddb69e685e6cd06b755f'
-          env=os.environ.copy();env.pop('GH_TOKEN',None);env.update(QT_QPA_PLATFORM='offscreen',QT_QPA_FONTDIR=str(pathlib.Path(os.environ['WINDIR'])/'Fonts'),PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(out))
-          home=root/'diagnostic-home';home.mkdir();env.update(HOME=str(home),USERPROFILE=str(home),APPDATA=str(home/'AppData/Roaming'),LOCALAPPDATA=str(home/'AppData/Local'))
-          results={}
-          for label,arg in [('frozen-inference','--candidate-probe'),('frozen-integrity','--candidate-code-substitution'),('actual-entrypoint-startup','--candidate-ui-smoke')]:
-              p=subprocess.run([str(exe),arg],env=env,capture_output=True,text=True,timeout=180);(out/(label+'.txt')).write_text(p.stdout+p.stderr);results[label]=p.returncode;assert p.returncode==0,(label,p.stdout,p.stderr)
-          sys.path.insert(0,str(root/'installer/native_candidate'));import build_candidate as b;b.EVIDENCE=out;b.native_inventory(dist,exe)
-          inventory=json.loads((out/'native-link-inventory.json').read_text());assert inventory['native_objects']==146 and inventory['complete'] and not inventory['forbidden_links'] and not inventory['foreign_native_objects']
-          assert not list(dist.rglob('*cudnn*')) and intel.is_file()
-          (out/'omission-verdict.json').write_text(json.dumps({'input_sha256':sha,'removed_path':'_internal/ctranslate2/cudnn64_9.dll','removed_sha256':removed_sha,'intel_runtime_unchanged':True,'subprocess_returncodes':results,'native_objects':146,'original_owner_asset_edited':False,'new_binary_uploaded':True,'hardware_acceptance':False,'rights_clearance':False},indent=2))
-          target=json.loads(subprocess.check_output(['gh','api','repos/hullashoo6/keystow/releases/452231425']))
-          assert target['draft'] and target['id']==452231425 and target['name'].startswith('PRIVATE CORRECTED CANDIDATE')
-          assert not any(x['name']==corrected.name for x in target['assets'])
-          digest=hashlib.sha256(corrected.read_bytes()).hexdigest()
-          upload=target['upload_url'].split('{')[0]+'?name='+corrected.name
-          req=urllib.request.Request(upload,data=corrected.read_bytes(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/zip'},method='POST')
-          with urllib.request.urlopen(req,timeout=180) as response:asset=json.load(response)
-          assert asset['state']=='uploaded' and asset['size']==corrected.stat().st_size
-          assert asset['digest']=='sha256:'+digest
-          (out/'corrected-candidate.json').write_text(json.dumps({'sha256':digest,'bytes':corrected.stat().st_size,'retained_entries':len(bb),'payload_removed':list(set(aa)-set(bb)),'payload_added':[],'payload_changed':[],'asset':asset,'draft_id':452231425,'draft_url':target['html_url']},indent=2))
-          print((out/'corrected-candidate.json').read_text())
-          print((out/'omission-verdict.json').read_text())
-          PY
+          python - <<'PYCODE'
+          import os,json,subprocess,pathlib,hashlib,urllib.request,zipfile,datetime
+          out=pathlib.Path('diagnostic-evidence');out.mkdir()
+          draft=json.loads(subprocess.check_output(['gh','api','repos/hullashoo6/keystow/releases/452231425']))
+          assert draft['draft'] and draft['id']==452231425
+          expected={'KeyStow-PRIVATE-CORRECTED-NO-CUDNN-436e575.zip':(242077910,'eb01efe84f8c5bf64e0873e69866e4ed82184353e2b8af096f6d735a83ac0972'),'1-KeyStow-CORRECTED-private-notices-and-source-route-20261120.zip':(2375250,'04fcc165a85add9aaa05c7708274a3413299db18a3a9c3b63a11ad2d79623887')}
+          rows=[]
+          for name,(size,want) in expected.items():
+              asset=next(x for x in draft['assets'] if x['name']==name)
+              req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/octet-stream'})
+              start=datetime.datetime.now(datetime.timezone.utc).isoformat()
+              with urllib.request.urlopen(req,timeout=180) as response:data=response.read();status=response.status
+              digest=hashlib.sha256(data).hexdigest();assert status==200 and len(data)==size and digest==want
+              temp=pathlib.Path(name);temp.write_bytes(data)
+              with zipfile.ZipFile(temp) as z:assert z.testzip() is None;entries=len(z.namelist())
+              rows.append({'name':name,'asset_id':asset['id'],'bytes':len(data),'sha256':digest,'http_status':status,'zip_entries':entries,'started_at':start,'verified_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'url':asset['browser_download_url']})
+          (out/'authenticated-download-verdict.json').write_text(json.dumps({'draft_id':452231425,'draft_url':draft['html_url'],'mutations':False,'actual_downloads':rows},indent=2));print((out/'authenticated-download-verdict.json').read_text())
+          PYCODE
       - name: Preserve bounded diagnostic evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: corrected-private-candidate-evidence
+          name: corrected-authenticated-download-evidence
           path: diagnostic-evidence/
           retention-days: 1
           if-no-files-found: error

@@ -51,11 +51,19 @@ with tempfile.TemporaryDirectory() as home:
         before=[{'pid':pid,'name':psutil.Process(pid).name()} for pid in sorted(tracked) if psutil.pid_exists(pid)]
         start=time.monotonic()
         if sys.platform=='win32':
+            from PIL import ImageGrab
+            ImageGrab.grab().save(evidence/'frozen-before-close.png')
             assert ctypes.windll.user32.PostMessageW(found[0],0x0010,0,0),'WM_CLOSE failed'
             close_action='WM_CLOSE on actual frozen Qt window'
         else:
-            subprocess.run(['osascript','-e','tell application "System Events" to tell process "KeyStow" to click button 1 of window 1'],check=True,timeout=20)
-            close_action='native macOS close button on actual frozen Qt window'
+            subprocess.run(['screencapture','-x',str(evidence/'frozen-before-close.png')],check=True,timeout=15)
+            # A one-file app has a bootloader and a GUI child with the same
+            # name. Select the actual window-owning PID, never a name match.
+            wanted=','.join(str(pid) for pid in sorted(tracked))
+            script='tell application "System Events"\n set wanted to {%s}\n repeat with p in (every application process)\n  if (unix id of p) is in wanted then\n   if (count of windows of p) > 0 then\n    set ownerPID to unix id of p\n    perform action "AXPress" of (first button of window 1 of p whose subrole is "AXCloseButton")\n    return ownerPID as text\n   end if\n  end if\n end repeat\n error "No window in the tracked process family"\nend tell' % wanted
+            close=subprocess.run(['osascript','-e',script],check=True,capture_output=True,text=True,timeout=20)
+            (evidence/'mac-close-owner-pid.txt').write_text(close.stdout)
+            close_action='native macOS AXCloseButton on tracked frozen GUI child'
         assert p.wait(timeout=120)==0
         deadline=time.monotonic()+10
         while any(psutil.pid_exists(pid) for pid in tracked) and time.monotonic()<deadline:time.sleep(.2)

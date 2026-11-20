@@ -144,3 +144,10 @@ with tempfile.TemporaryDirectory() as d,patch('keystow.single_instance.paths.dat
 '''
         r=subprocess.run([sys.executable,'-c',script],cwd=ROOT,env=dict(os.environ,QT_QPA_PLATFORM='offscreen'),capture_output=True,text=True,timeout=15)
         self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
+    def test_unwritable_lock_location_fails_closed_instead_of_running_unguarded(self):
+        from keystow.single_instance import InstanceGuard
+        with tempfile.TemporaryDirectory() as d:
+            guard=InstanceGuard(Path(d)/'missing-parent')
+            with self.assertRaises(OSError):guard.acquire()
+            self.assertFalse(guard.owned)

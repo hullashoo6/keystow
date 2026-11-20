@@ -45,10 +45,28 @@ jobs:
               if 'download.qt.io' not in src['url']:continue
               b=urllib.request.urlopen(src['url'],timeout=180).read();assert len(b)==src['bytes'] and sha(b)==src['sha256']
               d=app/'ThirdParty'/'corresponding-source';d.mkdir(exist_ok=True);(d/src['url'].split('/')[-1]).write_bytes(b)
+          # Independently acquire the runtime from Intel's exact NuGet redistribution package.
+          nuget_url='https://www.nuget.org/api/v2/package/intelopenmp.redist.win/2025.3.0.640'
+          nb=urllib.request.urlopen(nuget_url,timeout=180).read();assert sha(nb)=='a4212c4aec3e528864d56d8b0c87103cd5c21a888d1985124909a1f85624a449'
+          nd=app/'ThirdParty'/'Intel-OpenMP-NuGet-Distribution';nd.mkdir()
+          (nd/'intelopenmp.redist.win.2025.3.0.640.nupkg').write_bytes(nb)
+          import io
+          with zipfile.ZipFile(io.BytesIO(nb)) as nz:
+              assert nz.testzip() is None
+              runtime=nz.read('runtimes/win-x64/native/libiomp5md.dll');rp=app/'_internal'/'ctranslate2'/'libiomp5md.dll';assert runtime==rp.read_bytes();assert sha(runtime)=='982233366b0afcda1e0f55a0b134097e35b779613f54ddb69e685e6cd06b755f';rp.write_bytes(runtime)
+              for n in ['license.txt','intelopenmp.redist.win.nuspec','share/doc/compiler/licensing/openmp/third-party-programs.txt']:
+                  d=nd/n;d.parent.mkdir(parents=True,exist_ok=True);d.write_bytes(nz.read(n))
+          basis={'component':'Intel OpenMP libiomp5md.dll','source':nuget_url,'package_sha256':sha(nb),'runtime_bytes':len(runtime),'runtime_sha256':sha(runtime),'identical_to_prior_payload':True,'terms':'Intel Simplified Software License Version October 2022','scope':'This runtime only; independent third-party terms remain applicable.'}
+          (nd/'COMPONENT-SOURCE-BASIS.json').write_text(json.dumps(basis,indent=2))
+          hist=app/'ThirdParty'/'Historical-private-test-records';hist.mkdir()
+          for relative in ['770303219/COMPONENT-MAPPING-AND-LIMITS.md','770303219/READ-ME-FIRST.md']:
+              old=app/'ThirdParty'/relative
+              if old.exists():shutil.move(str(old),str(hist/old.name))
+          (nd/'COMPONENT-TERMS.txt').write_text('This unmodified Intel OpenMP runtime is distributed from Intel NuGet intelopenmp.redist.win 2025.3.0.640 under its supplied Intel Simplified Software License October 2022. Intel Corporation copyright, full terms and nested notices are retained here. Do not modify, reverse engineer, decompile or disassemble the Intel software contrary to its terms. Do not use Intel or supplier names as endorsement. Third-party software remains governed by its separate terms. These Intel restrictions do not relicense KeyStow source or impose a blanket restriction on LGPL-covered components. Historical alternative-source investigations are retained separately and do not override this component source statement. No claim of Intel certification or performance guarantee.\n')
           inno_url='https://github.com/jrsoftware/issrc/releases/download/is-6_4_3/innosetup-6.4.3.exe'
           b=urllib.request.urlopen(inno_url,timeout=120).read();assert sha(b)=='f3c42116542c4cc57263c5ba6c4feabfc49fe771f2f98a79d2f7628b8762723b';inno=downloads/'inno.exe';inno.write_bytes(b)
           subprocess.run([str(inno),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-'],check=True)
-          (app/'INSTALL-README.txt').write_text('KeyStow private Windows test. Unsigned, optional noise suppression omitted, no cuDNN. Not device acceptance or rights/sale/public readiness. New defaults Right Ctrl and hold-to-talk; existing preferences are preserved. Close hides to tray; double-click tray to reopen. Quit from tray menu. No automatic start-at-login is registered by this installer. Source, licenses and notices are included under ThirdParty. Keep Notepad focused during dictation. Clipboard restoration preserves text only, best effort. Do not bypass Windows security warnings. Inno Setup 6.4.3 used under its supplied license.\n')
+          (app/'INSTALL-README.txt').write_text('KeyStow Windows x64 test installer. Unsigned, optional noise suppression unavailable, no cuDNN. Real-device microphone, physical hotkey, paste and tray acceptance remain pending. New defaults Right Ctrl and hold-to-talk; explicit existing preferences remain. Close hides to tray; double-click tray to reopen; Quit exits. No installer-created start-at-login. Keep Notepad focused during dictation. Clipboard restoration is text-only best effort. If Windows security blocks it, stop and report the warning, do not disable protection.\n\nIntel OpenMP libiomp5md.dll is sourced directly from Intel NuGet intelopenmp.redist.win 2025.3.0.640, unmodified and byte-identical to the prior runtime, under the package-supplied Intel Simplified Software License October 2022. Full package, copyright, license, nested notices and source basis are in ThirdParty/Intel-OpenMP-NuGet-Distribution. Its component-specific restrictions apply to Intel software, not to all KeyStow or LGPL components. Other libraries and model weights retain their own licenses. KeyStow source alone is MIT. Complete supplied sources and notices are under ThirdParty; LGPL-compatible component replacement/debugging is not prohibited by KeyStow terms. Historical private-test investigations are separately labelled. Inno Setup 6.4.3 used under its supplied license. This is an isolated test install, not a verified production upgrade.\n')
           license_url='https://raw.githubusercontent.com/jrsoftware/issrc/is-6_4_3/license.txt';(app/'ThirdParty'/'Inno-Setup-6.4.3-LICENSE.txt').write_bytes(urllib.request.urlopen(license_url).read())
           # Exact expected payload manifest excludes only added source/notice materials.
           with zipfile.ZipFile(payload) as z:manifest={n.removeprefix('KeyStowCandidate/'):sha(z.read(n)) for n in z.namelist() if not n.endswith('/')}
@@ -63,7 +81,7 @@ jobs:
           ArchitecturesAllowed=x64compatible
           ArchitecturesInstallIn64BitMode=x64compatible
           OutputDir=output
-          OutputBaseFilename=KeyStow-Private-Setup-436e575
+          OutputBaseFilename=KeyStow-Windows-Test-NuGet-436e575
           Compression=lzma2/fast
           SolidCompression=yes
           WizardStyle=modern
@@ -80,11 +98,11 @@ jobs:
           script=root/'private-setup.iss';script.write_text('\n'.join(x.strip() for x in iss.splitlines()))
           iscc=pathlib.Path(os.environ.get('ProgramFiles(x86)','C:/Program Files (x86)'))/'Inno Setup 6'/'ISCC.exe';assert iscc.exists()
           with (ev/'compile.txt').open('w') as f:subprocess.run([str(iscc),str(script)],stdout=f,stderr=subprocess.STDOUT,check=True)
-          setup=root/'output'/'KeyStow-Private-Setup-436e575.exe';assert setup.exists()
+          setup=root/'output'/'KeyStow-Windows-Test-NuGet-436e575.exe';assert setup.exists()
           install=root/'installed private test é';install.mkdir();(install/'unrelated-user-file.txt').write_text('preserve me')
           subprocess.run([str(setup),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/DIR='+str(install),'/LOG='+str(ev/'install.log')],check=True)
           actual={n:sha((install/n).read_bytes()) for n in manifest};assert actual==manifest
-          notice_manifest={str(f.relative_to(app)):sha(f.read_bytes()) for f in (app/'ThirdParty').rglob('*') if f.is_file()};assert all(sha((install/n).read_bytes())==h for n,h in notice_manifest.items())
+          notice_manifest={str(f.relative_to(app)):sha(f.read_bytes()) for f in app.rglob('*') if f.is_file() and (str(f.relative_to(app)).startswith('ThirdParty') or f.name=='INSTALL-README.txt')};assert all(sha((install/n).read_bytes())==h for n,h in notice_manifest.items())
           # Installer must not add a Run entry; do not modify any pre-existing entry.
           value=None
           try:
@@ -100,10 +118,10 @@ jobs:
               codes[label]=r.returncode;assert r.returncode==0,label
           subprocess.run([str(install/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG='+str(ev/'uninstall.log')],check=True)
           assert not (install/'KeyStowCandidate.exe').exists() and not (install/'_internal').exists();assert (install/'unrelated-user-file.txt').read_text()=='preserve me'
-          verdict={'source_commit':'436e575a97fb4967bbddf5d126f448ca1f02f17e','payload_sha256':expected[770297672][1],'payload_files_unchanged':len(manifest),'setup_bytes':setup.stat().st_size,'setup_sha256':sha(setup.read_bytes()),'install_hash_check':True,'notice_source_file_hashes_unchanged':len(notice_manifest),'unrelated_user_file_preserved':True,'spaces_nonascii_install_path':True,'uninstall_check':True,'no_autostart_registration':True,'tests':codes,'device_acceptance':False,'rights_clearance':False,'unsigned':True,'verified_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          verdict={'source_commit':'436e575a97fb4967bbddf5d126f448ca1f02f17e','payload_sha256':expected[770297672][1],'payload_files_unchanged':len(manifest),'setup_bytes':setup.stat().st_size,'setup_sha256':sha(setup.read_bytes()),'install_hash_check':True,'notice_source_file_hashes_unchanged':len(notice_manifest),'unrelated_user_file_preserved':True,'spaces_nonascii_install_path':True,'uninstall_check':True,'no_autostart_registration':True,'tests':codes,'device_acceptance':False,'rights_clearance':False,'openmp_nuget_origin_verified':basis,'unsigned':True,'verified_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
           (ev/'installer-verdict.json').write_text(json.dumps(verdict,indent=2));shutil.copy(script,ev/'private-setup.iss')
           # New private staging only. Do not mutate either prior draft or publish.
-          rel=api('repos/hullashoo6/keystow/releases/452271643');assert rel['draft'] and rel['tag_name']=='private-installer-test-20261120' and not rel['assets']
+          rel=api('repos/hullashoo6/keystow/releases/452280669');assert rel['draft'] and rel['tag_name']=='windows-test-nuget-20261120' and not rel['assets']
           upload_url=rel['upload_url'].split('{')[0]+'?name='+setup.name
           req=urllib.request.Request(upload_url,data=setup.read_bytes(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/octet-stream'},method='POST')
           asset=json.load(urllib.request.urlopen(req,timeout=180));assert asset['state']=='uploaded' and asset['size']==verdict['setup_bytes']
@@ -114,7 +132,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: private-installer-validation-evidence
+          name: nuget-origin-installer-validation-evidence
           path: installer-evidence/
           retention-days: 1
           if-no-files-found: error

@@ -38,7 +38,8 @@ jobs:
           builder_path=root/'installer/native_candidate/build_candidate.py'
           bs=builder_path.read_text();bs=bs.replace('    native_inventory(dist,exe)','    for removed in dist.rglob("cudnn64_9.dll"): removed.unlink()\n    native_inventory(dist,exe)',1)
           builder_path.write_text(bs)
-          import importlib.util
+          import importlib.util,sys
+          sys.path.insert(0,str(builder_path.parent))
           spec=importlib.util.spec_from_file_location('candidate_builder',builder_path);builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
           builder.main()
           shutil.copytree(root/'candidate-evidence',ev/'rebuild-evidence',ignore=shutil.ignore_patterns('*.zip','*.tar.gz'))

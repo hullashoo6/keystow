@@ -239,8 +239,8 @@ jobs:
           canvas.save(ev/'installed-shell-icons.png')
           # Record runtime QIcon pixels for window/taskbar and both tray states.
           icon_env=dict(env,PYTHONPATH=str(root))
-          script="from PySide6.QtWidgets import QApplication;from keystow import tray_icons;from pathlib import Path; a=QApplication([]); out=Path(r'"+str(ev)+"');[(tray_icons.icon(n).pixmap(64,64).save(str(out/('runtime-icon-'+n+'.png')))) for n in ['app','idle','listening']]"
-          subprocess.run([sys.executable,'-c',script],env=icon_env,check=True)
+          runtime_icon_script="from PySide6.QtWidgets import QApplication;from keystow import tray_icons;from pathlib import Path; a=QApplication([]); out=Path(r'"+str(ev)+"');[(tray_icons.icon(n).pixmap(64,64).save(str(out/('runtime-icon-'+n+'.png')))) for n in ['app','idle','listening']]"
+          subprocess.run([sys.executable,'-c',runtime_icon_script],env=icon_env,check=True)
           (ev/'installed-icon-evidence.json').write_text(json.dumps({'shell_icons':identities,'shortcuts':links,'uninstall_display_icon':uninstall_icon,'runtime_window_taskbar_and_tray_icons_saved':True,'actual_owner_start_cache_verified':False,'same_existing_brand_no_redesign':True},indent=2))
           subprocess.run([str(install/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG='+str(ev/'uninstall.log')],check=True)
           assert not (install/'KeyStowCandidate.exe').exists() and not (install/'_internal').exists();assert (install/'unrelated-user-file.txt').read_text()=='preserve me'

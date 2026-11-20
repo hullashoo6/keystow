@@ -54,10 +54,8 @@ with tempfile.TemporaryDirectory() as home:
             assert ctypes.windll.user32.PostMessageW(found[0],0x0010,0,0),'WM_CLOSE failed'
             close_action='WM_CLOSE on actual frozen Qt window'
         else:
-            # Apple-event Quit is native OS integration, window Close is covered
-            # separately by real Qt component tests on this same macOS runner.
-            subprocess.run(['osascript','-e','tell application "KeyStow" to quit'],check=True,timeout=20)
-            close_action='native Apple-event Quit; window Close covered by Qt test'
+            subprocess.run(['osascript','-e','tell application "System Events" to tell process "KeyStow" to click button 1 of window 1'],check=True,timeout=20)
+            close_action='native macOS close button on actual frozen Qt window'
         assert p.wait(timeout=120)==0
         deadline=time.monotonic()+10
         while any(psutil.pid_exists(pid) for pid in tracked) and time.monotonic()<deadline:time.sleep(.2)

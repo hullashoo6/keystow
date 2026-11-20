@@ -1,4 +1,4 @@
-name: KeyStow isolated existing-byte cuDNN omission diagnostic
+name: KeyStow corrected private candidate native validation
 on:
   workflow_dispatch:
 permissions:
@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install pefile==2023.2.7 pyinstaller==6.16.0
-      - name: Validate isolated copy only, never upload native bytes
+      - name: Prepare distinct candidate, validate natively, upload only to new held draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -34,13 +34,23 @@ jobs:
           with urllib.request.urlopen(req,timeout=180) as response:data=response.read()
           sha=hashlib.sha256(data).hexdigest();assert sha=='1eea311f4e4d6e0c33ba6b428fee5f191547d767b11cc40046820f36873a243f'
           archive=root/'isolated-original.zip';archive.write_bytes(data)
+          corrected=root/'KeyStow-PRIVATE-CORRECTED-NO-CUDNN-436e575.zip'
+          with zipfile.ZipFile(archive) as a,zipfile.ZipFile(corrected,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as b:
+              for i in a.infolist():
+                  if i.filename.endswith('/_internal/ctranslate2/cudnn64_9.dll'):continue
+                  b.writestr(i,a.read(i.filename))
+          with zipfile.ZipFile(archive) as a,zipfile.ZipFile(corrected) as b:
+              aa={n:hashlib.sha256(a.read(n)).hexdigest() for n in a.namelist()};bb={n:hashlib.sha256(b.read(n)).hexdigest() for n in b.namelist()}
+              assert set(aa)-set(bb)=={'KeyStowCandidate/_internal/ctranslate2/cudnn64_9.dll'} and not set(bb)-set(aa)
+              assert all(aa[n]==v for n,v in bb.items()) and b.testzip() is None
+          archive_to_extract=corrected
           work=root/'isolated-copy';work.mkdir()
-          with zipfile.ZipFile(archive) as z:
+          with zipfile.ZipFile(archive_to_extract) as z:
               assert z.testzip() is None
               assert all(not pathlib.PurePosixPath(n).is_absolute() and '..' not in pathlib.PurePosixPath(n).parts for n in z.namelist())
               z.extractall(work)
           dist=work/'KeyStowCandidate';exe=dist/'KeyStowCandidate.exe'
-          removed=dist/'_internal/ctranslate2/cudnn64_9.dll';removed_sha=hashlib.sha256(removed.read_bytes()).hexdigest();assert removed_sha=='9edbcdff73b0af070eb160b2ce66e59feca04aa017351d8eedcc5e8e149967d2';removed.unlink()
+          removed_sha='9edbcdff73b0af070eb160b2ce66e59feca04aa017351d8eedcc5e8e149967d2'
           intel=dist/'_internal/ctranslate2/libiomp5md.dll';assert hashlib.sha256(intel.read_bytes()).hexdigest()=='982233366b0afcda1e0f55a0b134097e35b779613f54ddb69e685e6cd06b755f'
           env=os.environ.copy();env.pop('GH_TOKEN',None);env.update(QT_QPA_PLATFORM='offscreen',QT_QPA_FONTDIR=str(pathlib.Path(os.environ['WINDIR'])/'Fonts'),PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(out))
           home=root/'diagnostic-home';home.mkdir();env.update(HOME=str(home),USERPROFILE=str(home),APPDATA=str(home/'AppData/Roaming'),LOCALAPPDATA=str(home/'AppData/Local'))
@@ -50,14 +60,25 @@ jobs:
           sys.path.insert(0,str(root/'installer/native_candidate'));import build_candidate as b;b.EVIDENCE=out;b.native_inventory(dist,exe)
           inventory=json.loads((out/'native-link-inventory.json').read_text());assert inventory['native_objects']==146 and inventory['complete'] and not inventory['forbidden_links'] and not inventory['foreign_native_objects']
           assert not list(dist.rglob('*cudnn*')) and intel.is_file()
-          (out/'omission-verdict.json').write_text(json.dumps({'input_sha256':sha,'removed_path':'_internal/ctranslate2/cudnn64_9.dll','removed_sha256':removed_sha,'intel_runtime_unchanged':True,'subprocess_returncodes':results,'native_objects':146,'original_owner_asset_edited':False,'new_binary_uploaded':False,'hardware_acceptance':False,'rights_clearance':False},indent=2))
+          (out/'omission-verdict.json').write_text(json.dumps({'input_sha256':sha,'removed_path':'_internal/ctranslate2/cudnn64_9.dll','removed_sha256':removed_sha,'intel_runtime_unchanged':True,'subprocess_returncodes':results,'native_objects':146,'original_owner_asset_edited':False,'new_binary_uploaded':True,'hardware_acceptance':False,'rights_clearance':False},indent=2))
+          target=json.loads(subprocess.check_output(['gh','api','repos/hullashoo6/keystow/releases/452231425']))
+          assert target['draft'] and target['id']==452231425 and target['name'].startswith('PRIVATE CORRECTED CANDIDATE')
+          assert not any(x['name']==corrected.name for x in target['assets'])
+          digest=hashlib.sha256(corrected.read_bytes()).hexdigest()
+          upload=target['upload_url'].split('{')[0]+'?name='+corrected.name
+          req=urllib.request.Request(upload,data=corrected.read_bytes(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/zip'},method='POST')
+          with urllib.request.urlopen(req,timeout=180) as response:asset=json.load(response)
+          assert asset['state']=='uploaded' and asset['size']==corrected.stat().st_size
+          assert asset['digest']=='sha256:'+digest
+          (out/'corrected-candidate.json').write_text(json.dumps({'sha256':digest,'bytes':corrected.stat().st_size,'retained_entries':len(bb),'payload_removed':list(set(aa)-set(bb)),'payload_added':[],'payload_changed':[],'asset':asset,'draft_id':452231425,'draft_url':target['html_url']},indent=2))
+          print((out/'corrected-candidate.json').read_text())
           print((out/'omission-verdict.json').read_text())
           PY
       - name: Preserve bounded diagnostic evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: cuDNN-omission-existing-bytes-evidence
+          name: corrected-private-candidate-evidence
           path: diagnostic-evidence/
           retention-days: 1
           if-no-files-found: error

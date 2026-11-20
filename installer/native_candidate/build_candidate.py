@@ -13,7 +13,7 @@ UPLOAD = ROOT / 'candidate-upload'
 ARCHIVE_CAP = (250 if sys.platform == 'win32' else 220) * 1024 * 1024
 EVIDENCE_CAP = 10 * 1024 * 1024
 UPSTREAM_SHA = '79a66ad50688c0b794dd501dc340a736992a6342f7f95e5811be60b5224a26a7'
-BAD = re.compile(r'(^|[/\\.])av([/\\.]|$)|(?:avcodec|avformat|avutil|avfilter|avdevice|swresample|swscale|postproc|ffmpeg|virtualkeyboard|asio|Qt6Pdf|QtPdf.framework|[/\\]qpdf\.)', re.I)
+BAD = re.compile(r'(^|[/\\.])av([/\\.]|$)|(?:avcodec|avformat|avutil|avfilter|avdevice|swresample|swscale|postproc|ffmpeg|virtualkeyboard|asio|rnnoise\.(?:dll|so|dylib)|librnnoise|Qt6Pdf|QtPdf.framework|[/\\]qpdf\.)', re.I)
 
 def digest(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -108,37 +108,30 @@ def tests_and_build(model):
     run([sys.executable, '-m', 'unittest', 'test_virtual_keyboard_filter', 'test_minimal_pdf_filter'], 'qt-filter-tests', env, HERE)
     run([sys.executable, HERE/'probe.py', '--model', model, '--sample', HERE/'sample.npy'],
         'installed-inference', env)
-    # Windows RNNoise comes from the same native dependency route as the release.
+    # Private owner test deliberately omits the optional RNNoise DLL/model.
+    # This is not approval to publish a reduced-feature release.
     binary_args = []
-    if sys.platform == 'win32':
-        rn = WORK/'rnnoise'; rn.mkdir()
-        run([sys.executable, '-m', 'pip', 'download', 'pyrnnoise==0.4.5', '--no-deps',
-             '--only-binary=:all:', '-d', rn], 'rnnoise-download')
-        w = next(rn.glob('*.whl'))
-        with zipfile.ZipFile(w) as z:
-            names = [n for n in z.namelist() if n.endswith('/rnnoise.dll')]
-            assert len(names) == 1
-            native = ROOT/'keystow/vendor/rnnoise.dll'; native.write_bytes(z.read(names[0]))
-        save('rnnoise-source.json', {'wheel':w.name,'wheel_sha256':digest(w),
-             'native_sha256':digest(native)})
-        binary_args = ['--add-binary',str(native)+os.pathsep+'keystow/vendor']
-    else:
-        save('rnnoise-source.json', {'bundled':False,
-             'boundary':'Existing macOS passthrough, not native denoise acceptance'})
+    save('rnnoise-source.json', {'bundled': False,
+         'boundary': 'PRIVATE OWNER TEST: optional noise suppression omitted; ordinary dictation retained'})
     import importlib.util
+    pynput_source = Path(next(iter(importlib.util.find_spec('pynput').submodule_search_locations)))
+    save('pynput-source-route.json', {'source': str(pynput_source),
+         'version': md.version('pynput'), 'external_source_not_pyz': True})
     pkg = Path(next(iter(importlib.util.find_spec('faster_whisper').submodule_search_locations)))
     args = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir',
        '--console', '--name', 'KeyStowCandidate', '--distpath', WORK/'dist',
        '--workpath', WORK/'pyinstaller', '--specpath', WORK,
        '--additional-hooks-dir', HERE, '--paths', HERE, '--runtime-hook', HERE/'runtime_hook.py',
+       '--exclude-module','keystow.vendor.rnnoise',
        '--exclude-module','PySide6.QtPdf',
        '--exclude-module','PySide6.QtPdfWidgets',
        '--exclude-module','PySide6.QtPdfQuick',
        '--exclude-module','PySide6.QtVirtualKeyboard',
        '--exclude-module','PySide6.QtVirtualKeyboardQml',
-       '--hidden-import','pynput.keyboard._dummy', '--hidden-import','pynput.mouse._dummy',
+       '--exclude-module','pynput', '--hidden-import','ctypes.wintypes', '--hidden-import','six',
        '--collect-all','faster_whisper','--collect-all','ctranslate2',
        '--add-data',str(model)+os.pathsep+'models/faster-whisper-base',
+       '--add-data',str(pynput_source)+os.pathsep+'pynput',
        '--add-data',str(pkg/'audio.py')+os.pathsep+'faster_whisper',
        '--add-data',str(pkg/'transcribe.py')+os.pathsep+'faster_whisper',
        '--add-data',str(ROOT/'keystow/numpy_source_hashes.json')+os.pathsep+'keystow',
@@ -156,6 +149,19 @@ def tests_and_build(model):
                              CANDIDATE_PORTAUDIO_VARIANT=variant)
             audio_env.pop('SD_ENABLE_ASIO', None)
             run([exe,'--candidate-portaudio-probe'], 'portaudio-'+variant, audio_env)
+    # Demonstrate that actual frozen code loads an interface-compatible modified
+    # pynput source tree, with no simulated keystrokes or global input capture.
+    keyboard_env = dict(env, CANDIDATE_EVIDENCE_DIR=str(EVIDENCE))
+    keyboard_env.pop('PYNPUT_BACKEND', None)
+    run([exe, '--candidate-pynput-source-probe'], 'pynput-external-source', keyboard_env)
+    modified = WORK/'modified-pynput'; shutil.copytree(dist, modified, symlinks=True)
+    entry = modified/'_internal/pynput/__init__.py'
+    assert entry.is_file()
+    with entry.open('a', encoding='utf-8') as out:
+        out.write('\nKEYSTOW_REPLACEMENT_PROBE = "modified-interface-compatible-source"\n')
+    modified_env = dict(keyboard_env, CANDIDATE_PYNPUT_REPLACEMENT_MARKER='modified-interface-compatible-source')
+    run([modified/exe.name, '--candidate-pynput-source-probe'], 'pynput-replacement', modified_env)
+    shutil.rmtree(modified)
     run([exe,'--candidate-probe'], 'frozen-inference', env)
     run([exe,'--candidate-code-substitution'], 'frozen-code-substitution', env)
     for matching_manifest in (False, True):
@@ -257,6 +263,7 @@ def native_inventory(dist,exe):
     modules=sorted(reader.open_embedded_archive(pyzs[0]).toc)
     save('frozen-module-inventory.json',{'complete':True,'modules':modules})
     assert not [m for m in modules if BAD.search(m)], 'Forbidden frozen module'
+    assert not [m for m in modules if m == 'pynput' or m.startswith('pynput.')], 'pynput must remain replaceable external source'
     # Report every file and the frozen modules before failing the audit.
     # Foreign objects remain unresolved, never silently accepted or removed.
     assert not foreign_native, 'Foreign native objects have uninspected links'
@@ -275,6 +282,8 @@ def seal():
       'repack-adapted.txt','wheel-identity.json','resolve.json','install-target.txt','pip-check.txt',
       'installed-dependencies.json','model-contract.json','fixture-source.json',
       'pristine-contract-tests.txt','runtime-regressions.txt','qt-filter-tests.txt','installed-inference.txt','icons.txt',
+      'pynput-source-route.json','pynput-external-source.txt','pynput-external-source.json',
+      'pynput-replacement.txt','pynput-replacement.json',
       'rnnoise-download.txt','rnnoise-source.json','pyinstaller.txt','frozen-inference.txt',
       'frozen-code-substitution.txt','tampered-False.txt','tampered-True.txt',
       'actual-entrypoint-ui.txt','ready-ui.png','ui-smoke.json','candidate-archive.json',

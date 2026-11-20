@@ -485,7 +485,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # Closing means quit, not a hidden microphone/listener in the tray.
         # Keep Qt alive only while in-flight workers finish safely.
-        event.ignore()
+        event.accept()
         self.quit_requested.emit()
 
     def _model_changed(self, text):
@@ -562,7 +562,13 @@ def run_app(controller_factory):
             shutdown_timer.stop()
             app.quit()
 
+    quitting = False
+
     def request_quit():
+        nonlocal quitting
+        if quitting:
+            return
+        quitting = True
         controller.shutdown()
         window.set_state("Finishing the current task before quitting...", busy=True)
         shutdown_timer.start()

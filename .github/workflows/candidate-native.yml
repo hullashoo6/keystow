@@ -14,7 +14,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: keystow-candidate-native
@@ -71,3 +71,33 @@ jobs:
           compression-level: 0
           if-no-files-found: error
           include-hidden-files: false
+
+      - name: Transfer passing private test only to existing unpublished owner draft
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import os,json,subprocess,pathlib,hashlib,urllib.request,urllib.parse
+          repo=os.environ['GH_REPO']; assert repo=='hullashoo6/keystow'
+          draft=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/452144563']))
+          assert draft['draft'] is True and draft['tag_name']=='private-owner-test-20261120'
+          assert draft['name']=='PRIVATE OWNER TEST TRANSFER ONLY - NOT A RELEASE'
+          record=json.loads(pathlib.Path('candidate-evidence/candidate-archive.json').read_text())
+          path=pathlib.Path('candidate-evidence')/record['filename']
+          data=path.read_bytes(); assert hashlib.sha256(data).hexdigest()==record['sha256']
+          assert json.loads(pathlib.Path('candidate-evidence/rnnoise-source.json').read_text())['bundled'] is False
+          assert json.loads(pathlib.Path('candidate-evidence/qt-modified-library.json').read_text())['actual_entrypoint_ready'] is True
+          name='PRIVATE-Windows-NO-DENOISE-'+os.environ['GITHUB_SHA']+'.zip'
+          assert not any(x['name']==name for x in draft['assets']), 'Do not overwrite or duplicate an existing transfer'
+          url=draft['upload_url'].split('{')[0]+'?'+urllib.parse.urlencode({'name':name})
+          request=urllib.request.Request(url,data=data,method='POST',headers={
+             'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/zip',
+             'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          with urllib.request.urlopen(request,timeout=180) as response: asset=json.load(response)
+          assert asset['size']==len(data)
+          print(json.dumps({'draft_id':draft['id'],'draft':True,'asset_id':asset['id'],
+             'name':asset['name'],'size':asset['size'],'sha256':record['sha256'],
+             'owner_handover':False,'release_published':False}))
+          PY

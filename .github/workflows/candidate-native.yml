@@ -1,4 +1,4 @@
-name: Mac native packaging and compatibility evidence
+name: Mac native assessment log diagnosis
 on:
   workflow_dispatch:
 permissions:
@@ -60,9 +60,24 @@ jobs:
            attach=run(['hdiutil','attach','-nobrowse','-readonly','-plist',dmg]);mount=next(x['mount-point'] for x in plistlib.loads(attach['stdout'].encode())['system-entities'] if 'mount-point' in x)
            installed=root/'installed Mac test é.app';shutil.copytree(Path(mount)/app.name,installed,symlinks=True);run(['hdiutil','detach',mount])
            run(['xattr','-w','com.apple.quarantine','0083;00000000;KeyStowTest;',installed])
+           # Read-only unified logs, default privacy, no security settings changes.
+           import datetime,time
+           assessment_start=datetime.datetime.now(datetime.timezone.utc).isoformat()
+           predicate='process == "syspolicyd" OR process CONTAINS[c] "XProtect" OR sender == "AppleSystemPolicy" OR sender == "AppleMobileFileIntegrity" OR process == "amfid" OR process == "taskgated-helper"'
+           log_path=ev/'assessment-live-system-log.txt'
+           log_file=log_path.open('w')
+           log_proc=subprocess.Popen(['/usr/bin/log','stream','--style','compact','--level','debug','--predicate',predicate],stdout=log_file,stderr=subprocess.STDOUT,text=True)
+           (ev/'security-component-version.json').write_text(json.dumps(run(['system_profiler','SPInstallHistoryDataType','-json'],False),indent=2))
+           (ev/'signing-display.json').write_text(json.dumps(run(['codesign','-d','--verbose=4','--entitlements',':-',installed],False),indent=2))
            (ev/'gatekeeper-assessment.json').write_text(json.dumps(run(['spctl','--assess','--type','execute','--verbose=4',installed],False),indent=2))
            (ev/'copied-app-signing.json').write_text(json.dumps(run(['codesign','--verify','--deep','--strict','--verbose=4',installed],False),indent=2))
            (ev/'distribution-assessment.json').write_text(json.dumps(run(['syspolicy_check','distribution',installed],False),indent=2))
+           log_proc.terminate()
+           try:log_proc.wait(timeout=10)
+           except subprocess.TimeoutExpired:log_proc.kill();log_proc.wait(timeout=10)
+           log_file.close()
+           (ev/'assessment-recent-system-log.json').write_text(json.dumps(run(['/usr/bin/log','show','--last','5m','--style','compact','--info','--debug','--predicate',predicate],False),indent=2))
+           (ev/'assessment-window.json').write_text(json.dumps({'start_utc':assessment_start,'end_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'private_data_logging_enabled':False,'security_settings_changed':False,'build_purpose':'same-session assessment diagnostics, not a release retry'},indent=2))
            env=dict(os.environ,QT_QPA_PLATFORM='offscreen',PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(ev))
            probes={}
            for name,arg in [('inference','--candidate-probe'),('integrity','--candidate-code-substitution'),('ready','--candidate-ui-smoke')]:

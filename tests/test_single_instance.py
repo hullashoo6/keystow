@@ -79,7 +79,7 @@ with tempfile.TemporaryDirectory() as d:
 
     def test_secondary_launch_hands_focus_to_primary_without_taking_lock(self):
         script='''
-import tempfile
+import tempfile,subprocess,sys
 from PySide6.QtCore import QCoreApplication,QTimer
 from keystow.single_instance import InstanceGuard
 app=QCoreApplication([])
@@ -87,15 +87,17 @@ with tempfile.TemporaryDirectory() as d:
  primary=InstanceGuard(d);assert primary.acquire()
  received=[]
  primary.listen(lambda: (received.append(True),app.quit()))
- secondary=InstanceGuard(d);assert not secondary.acquire()
- assert secondary.activate_existing()
- QTimer.singleShot(3000,app.quit)
+ secondary=subprocess.Popen([sys.executable,'-c',"import sys;from keystow.single_instance import InstanceGuard;g=InstanceGuard(sys.argv[1]);assert not g.acquire();assert g.activate_existing()",d],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+ QTimer.singleShot(5000,app.quit)
  app.exec()
+ out,err=secondary.communicate(timeout=10)
+ assert secondary.returncode==0,out+err
  assert received==[True],received
- assert primary.owned and not secondary.owned
+ assert primary.owned
  primary.release()
- assert secondary.acquire()
- secondary.release()
+ replacement=InstanceGuard(d)
+ assert replacement.acquire()
+ replacement.release()
 '''
         r=subprocess.run([sys.executable,'-c',script],cwd=ROOT,capture_output=True,text=True,timeout=10)
         self.assertEqual(r.returncode,0,r.stdout+r.stderr)

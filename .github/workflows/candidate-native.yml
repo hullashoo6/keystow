@@ -81,9 +81,10 @@ jobs:
           iscc=pathlib.Path(os.environ.get('ProgramFiles(x86)','C:/Program Files (x86)'))/'Inno Setup 6'/'ISCC.exe';assert iscc.exists()
           with (ev/'compile.txt').open('w') as f:subprocess.run([str(iscc),str(script)],stdout=f,stderr=subprocess.STDOUT,check=True)
           setup=root/'output'/'KeyStow-Private-Setup-436e575.exe';assert setup.exists()
-          install=root/'installed-private-test'
+          install=root/'installed private test é';install.mkdir();(install/'unrelated-user-file.txt').write_text('preserve me')
           subprocess.run([str(setup),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/DIR='+str(install),'/LOG='+str(ev/'install.log')],check=True)
           actual={n:sha((install/n).read_bytes()) for n in manifest};assert actual==manifest
+          notice_manifest={str(f.relative_to(app)):sha(f.read_bytes()) for f in (app/'ThirdParty').rglob('*') if f.is_file()};assert all(sha((install/n).read_bytes())==h for n,h in notice_manifest.items())
           # Installer must not add a Run entry; do not modify any pre-existing entry.
           value=None
           try:
@@ -92,21 +93,20 @@ jobs:
                   except FileNotFoundError:pass
           except FileNotFoundError:pass
           assert value is None
-          env=os.environ.copy();env.pop('GH_TOKEN',None);env.update(QT_QPA_PLATFORM='offscreen',PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(ev))
+          env=os.environ.copy();env.pop('GH_TOKEN',None);env.update(QT_QPA_PLATFORM='offscreen',PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',QT_QPA_FONTDIR=str(pathlib.Path(os.environ['WINDIR'])/'Fonts'),CANDIDATE_EVIDENCE_DIR=str(ev))
           codes={}
           for label,arg in [('installed-inference','--candidate-probe'),('installed-integrity','--candidate-code-substitution'),('installed-entrypoint','--candidate-ui-smoke')]:
               with (ev/(label+'.txt')).open('w') as f:r=subprocess.run([str(install/'KeyStowCandidate.exe'),arg],env=env,stdout=f,stderr=subprocess.STDOUT,timeout=180)
               codes[label]=r.returncode;assert r.returncode==0,label
           subprocess.run([str(install/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG='+str(ev/'uninstall.log')],check=True)
-          assert not (install/'KeyStowCandidate.exe').exists() and not (install/'_internal').exists()
-          verdict={'source_commit':'436e575a97fb4967bbddf5d126f448ca1f02f17e','payload_sha256':expected[770297672][1],'payload_files_unchanged':len(manifest),'setup_bytes':setup.stat().st_size,'setup_sha256':sha(setup.read_bytes()),'install_hash_check':True,'uninstall_check':True,'no_autostart_registration':True,'tests':codes,'device_acceptance':False,'rights_clearance':False,'unsigned':True,'verified_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          assert not (install/'KeyStowCandidate.exe').exists() and not (install/'_internal').exists();assert (install/'unrelated-user-file.txt').read_text()=='preserve me'
+          verdict={'source_commit':'436e575a97fb4967bbddf5d126f448ca1f02f17e','payload_sha256':expected[770297672][1],'payload_files_unchanged':len(manifest),'setup_bytes':setup.stat().st_size,'setup_sha256':sha(setup.read_bytes()),'install_hash_check':True,'notice_source_file_hashes_unchanged':len(notice_manifest),'unrelated_user_file_preserved':True,'spaces_nonascii_install_path':True,'uninstall_check':True,'no_autostart_registration':True,'tests':codes,'device_acceptance':False,'rights_clearance':False,'unsigned':True,'verified_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
           (ev/'installer-verdict.json').write_text(json.dumps(verdict,indent=2));shutil.copy(script,ev/'private-setup.iss')
           # New private staging only. Do not mutate either prior draft or publish.
-          release=api('repos/hullashoo6/keystow/releases')
-          assert not any(x.get('tag_name')=='private-installer-test-20261120' for x in release)
-          subprocess.run(['gh','release','create','private-installer-test-20261120','--target','436e575a97fb4967bbddf5d126f448ca1f02f17e','--draft','--title','PRIVATE SINGLE-FILE INSTALLER TEST - DO NOT PUBLISH','--notes','Private unsigned single-file installer test. No public release or device/rights acceptance. Bundles unchanged corrected payload, all source-notice packages and exact Qt/PySide source archives.'],check=True)
-          subprocess.run(['gh','release','upload','private-installer-test-20261120',str(setup)],check=True)
-          releases=api('repos/hullashoo6/keystow/releases');rel=next(x for x in releases if x['tag_name']=='private-installer-test-20261120');assert rel['draft'];asset=next(x for x in rel['assets'] if x['name']==setup.name)
+          rel=api('repos/hullashoo6/keystow/releases/452271643');assert rel['draft'] and rel['tag_name']=='private-installer-test-20261120' and not rel['assets']
+          upload_url=rel['upload_url'].split('{')[0]+'?name='+setup.name
+          req=urllib.request.Request(upload_url,data=setup.read_bytes(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/octet-stream'},method='POST')
+          asset=json.load(urllib.request.urlopen(req,timeout=180));assert asset['state']=='uploaded' and asset['size']==verdict['setup_bytes']
           req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/octet-stream'});b=urllib.request.urlopen(req,timeout=180).read();assert len(b)==verdict['setup_bytes'] and sha(b)==verdict['setup_sha256']
           verdict.update(draft_id=rel['id'],draft_url=rel['html_url'],asset_id=asset['id'],download_url=asset['browser_download_url'],actual_authenticated_download_rehash=True);(ev/'installer-verdict.json').write_text(json.dumps(verdict,indent=2));print(json.dumps(verdict,indent=2))
           PYCODE

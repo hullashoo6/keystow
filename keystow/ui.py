@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
+    QMessageBox,
 )
 
 from . import autostart, config, paths, settings, stats, tray_icons
@@ -534,7 +535,20 @@ def run_app(controller_factory):
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # keep running in the tray
-    window = MainWindow()
+    from .single_instance import InstanceGuard
+    guard = InstanceGuard()
+    try:
+        if not guard.acquire():
+            guard.activate_existing()
+            return 0  # never construct a second recorder or global key listener
+        window = MainWindow()
+        guard.listen(window.show_and_raise)
+    except OSError as exc:
+        guard.release()
+        QMessageBox.critical(None, "KeyStow could not start", str(exc))
+        return 1
+    # Keep ownership alive for the complete event loop and worker shutdown.
+    app._keystow_instance_guard = guard
     # Keep the controller (and its worker/listener references) alive for the
     # entire Qt event loop. Construction alone does not start dictation.
     controller = controller_factory(window)
@@ -555,6 +569,10 @@ def run_app(controller_factory):
 
     window.quit_requested.connect(request_quit)
     shutdown_timer.timeout.connect(finish_quit_if_idle)
-    app.aboutToQuit.connect(controller.wait_for_shutdown)
     window.show()  # first launch shows the window; after that it hides to the tray
-    sys.exit(app.exec())
+    try:
+        result = app.exec()
+    finally:
+        controller.wait_for_shutdown()
+        guard.release()
+    sys.exit(result)

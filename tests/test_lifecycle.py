@@ -307,6 +307,51 @@ class LifecycleTest(unittest.TestCase):
         self.c._on_press(key); self.c._on_release(key); self.finish()
         self.paste.assert_called_once_with('fresh')
 
+    def test_three_unguarded_controllers_each_paste_the_same_utterance(self):
+        # Regression reproducer for releases that let three processes listen.
+        # No physical microphone or OS paste is claimed here.
+        controllers=[self.c]+[self.module.VoiceController(Mock()) for _ in range(2)]
+        for c in controllers:
+            c.transcriber=self.c.transcriber
+            c._transcribe_and_type('same microphone utterance',c.transcriber)
+        self.assertEqual(self.paste.call_count,3)
+        self.assertEqual([call.args[0] for call in self.paste.call_args_list],['second session']*3)
+
+
+    def test_redelivered_press_release_events_during_processing_do_not_retype(self):
+        self.c._toggle=False
+        entered,release=threading.Event(),threading.Event()
+        def infer(audio):
+            entered.set()
+            self.assertTrue(release.wait(3))
+            return 'one utterance'
+        self.c.transcriber.transcribe.side_effect=infer
+        key=self.c._hotkey
+        self.c._on_press(key);self.c._on_release(key)
+        self.assertTrue(entered.wait(2))
+        for _ in range(3):
+            self.c._on_press(key);self.c._on_release(key)
+        release.set();self.finish()
+        self.assertEqual(self.c.recorder.starts,1)
+        self.assertEqual(self.c.recorder.stops,1)
+        self.paste.assert_called_once_with('one utterance')
+
+    def test_own_paste_chord_cannot_reenter_recording_even_if_custom_hotkey_matches(self):
+        for hotkey in ['ctrl','v','cmd']:
+            with self.subTest(hotkey=hotkey):
+                self.c._hotkey=hotkey
+                self.c._hotkey_down=False
+                self.c._phase='processing'
+                def paste(text):
+                    for key in ['ctrl','v']:
+                        self.c._on_press(key)
+                    for key in ['v','ctrl']:
+                        self.c._on_release(key)
+                self.paste.side_effect=paste
+                self.c._transcribe_and_type('audio',self.c.transcriber)
+                self.assertEqual(self.c.recorder.starts,0)
+                self.assertEqual(self.c.recorder.stops,0)
+        self.assertEqual(self.paste.call_count,3)
 
 if __name__ == '__main__':
     unittest.main()

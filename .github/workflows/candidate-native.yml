@@ -1,103 +1,63 @@
-name: KeyStow candidate native evidence - NOT FOR RELEASE
-
+name: KeyStow isolated existing-byte cuDNN omission diagnostic
 on:
   workflow_dispatch:
-    inputs:
-      expected_sha:
-        description: Exact candidate commit SHA
-        required: true
-        type: string
-      candidate_label:
-        description: Must be NOT-FOR-RELEASE
-        required: true
-        default: NOT-FOR-RELEASE
-        type: string
-
 permissions:
-  contents: write
-
-concurrency:
-  group: keystow-candidate-native
-  cancel-in-progress: false
-
+  contents: read
 jobs:
-  native:
-    name: Candidate evidence (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
     steps:
-      - name: Validate candidate identity before checkout or dependencies
-        env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
-          CANDIDATE_LABEL: ${{ inputs.candidate_label }}
-          ACTUAL_SHA: ${{ github.sha }}
-          ACTUAL_REF: ${{ github.ref }}
-        run: |
-          python - <<'PY'
-          import os,re
-          assert re.fullmatch(r'[0-9a-f]{40}',os.environ['EXPECTED_SHA'])
-          assert os.environ['EXPECTED_SHA']==os.environ['ACTUAL_SHA']
-          assert os.environ['ACTUAL_REF']=='refs/heads/candidate/numpy-native-20261119'
-          assert os.environ['CANDIDATE_LABEL']=='NOT-FOR-RELEASE'
-          print('Exact candidate identity PASS; no release authority implied')
-          PY
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: 436e575a97fb4967bbddf5d126f448ca1f02f17e
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11'
-      - name: Build and inspect native candidate, with no publisher
-        run: python installer/native_candidate/build_candidate.py
-      - name: Seal bounded safe evidence even after a target failure
-        if: always()
-        id: seal
-        run: python installer/native_candidate/build_candidate.py --seal
-      - name: Store one-day diagnostic metadata only, no binary
-        if: always() && steps.seal.outputs.ready == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: NOT-FOR-RELEASE-${{ matrix.os }}-${{ github.sha }}
-          path: candidate-upload/
-          retention-days: 1
-          compression-level: 0
-          if-no-files-found: error
-          include-hidden-files: false
-
-      - name: Transfer passing private test only to existing unpublished owner draft
-        if: success()
+      - run: python -m pip install pefile==2024.8.26 pyinstaller==6.16.0
+      - name: Validate isolated copy only, never upload native bytes
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: |
           python - <<'PY'
-          import os,json,subprocess,pathlib,hashlib,urllib.request,urllib.parse
-          repo=os.environ['GH_REPO']; assert repo=='hullashoo6/keystow'
-          draft=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/452144563']))
-          assert draft['draft'] is True and draft['tag_name']=='private-owner-test-20261120'
-          assert draft['name']=='PRIVATE OWNER TEST TRANSFER ONLY - NOT A RELEASE'
-          record=json.loads(pathlib.Path('candidate-evidence/candidate-archive.json').read_text())
-          path=pathlib.Path('candidate-evidence')/record['filename']
-          data=path.read_bytes(); assert hashlib.sha256(data).hexdigest()==record['sha256']
-          assert json.loads(pathlib.Path('candidate-evidence/rnnoise-source.json').read_text())['bundled'] is False
-          assert json.loads(pathlib.Path('candidate-evidence/qt-modified-library.json').read_text())['actual_entrypoint_ready'] is True
-          name='PRIVATE-Windows-NO-DENOISE-'+os.environ['GITHUB_SHA']+'.zip'
-          assert not any(x['name']==name for x in draft['assets']), 'Do not overwrite or duplicate an existing transfer'
-          url=draft['upload_url'].split('{')[0]+'?'+urllib.parse.urlencode({'name':name})
-          request=urllib.request.Request(url,data=data,method='POST',headers={
-             'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/zip',
-             'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
-          with urllib.request.urlopen(request,timeout=180) as response: asset=json.load(response)
-          assert asset['size']==len(data)
-          print(json.dumps({'draft_id':draft['id'],'draft':True,'asset_id':asset['id'],
-             'name':asset['name'],'size':asset['size'],'sha256':record['sha256'],
-             'owner_handover':False,'release_published':False}))
+          import os,json,subprocess,pathlib,hashlib,urllib.request,zipfile,sys,shutil
+          root=pathlib.Path.cwd();out=root/'diagnostic-evidence';out.mkdir()
+          draft=json.loads(subprocess.check_output(['gh','api','repos/hullashoo6/keystow/releases/452144563']))
+          assert draft['draft'] and draft['tag_name']=='private-owner-test-20261120'
+          name='PRIVATE-Windows-NO-DENOISE-436e575a97fb4967bbddf5d126f448ca1f02f17e.zip'
+          asset=next(x for x in draft['assets'] if x['name']==name)
+          req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/octet-stream'})
+          with urllib.request.urlopen(req,timeout=180) as response:data=response.read()
+          sha=hashlib.sha256(data).hexdigest();assert sha=='1eea311f4e4d6e0c33ba6b428fee5f191547d767b11cc40046820f36873a243f'
+          archive=root/'isolated-original.zip';archive.write_bytes(data)
+          work=root/'isolated-copy';work.mkdir()
+          with zipfile.ZipFile(archive) as z:
+              assert z.testzip() is None
+              assert all(not pathlib.PurePosixPath(n).is_absolute() and '..' not in pathlib.PurePosixPath(n).parts for n in z.namelist())
+              z.extractall(work)
+          dist=work/'KeyStowCandidate';exe=dist/'KeyStowCandidate.exe'
+          removed=dist/'_internal/ctranslate2/cudnn64_9.dll';removed_sha=hashlib.sha256(removed.read_bytes()).hexdigest();assert removed_sha=='9edbcdff73b0af070eb160b2ce66e59feca04aa017351d8eedcc5e8e149967d2';removed.unlink()
+          intel=dist/'_internal/ctranslate2/libiomp5md.dll';assert hashlib.sha256(intel.read_bytes()).hexdigest()=='982233366b0afcda1e0f55a0b134097e35b779613f54ddb69e685e6cd06b755f'
+          env=os.environ.copy();env.pop('GH_TOKEN',None);env.update(QT_QPA_PLATFORM='offscreen',QT_QPA_FONTDIR=str(pathlib.Path(os.environ['WINDIR'])/'Fonts'),PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(out))
+          home=root/'diagnostic-home';home.mkdir();env.update(HOME=str(home),USERPROFILE=str(home),APPDATA=str(home/'AppData/Roaming'),LOCALAPPDATA=str(home/'AppData/Local'))
+          results={}
+          for label,arg in [('frozen-inference','--candidate-probe'),('frozen-integrity','--candidate-code-substitution'),('actual-entrypoint-startup','--candidate-ui-smoke')]:
+              p=subprocess.run([str(exe),arg],env=env,capture_output=True,text=True,timeout=180);(out/(label+'.txt')).write_text(p.stdout+p.stderr);results[label]=p.returncode;assert p.returncode==0,(label,p.stdout,p.stderr)
+          sys.path.insert(0,str(root/'installer/native_candidate'));import build_candidate as b;b.EVIDENCE=out;b.native_inventory(dist,exe)
+          inventory=json.loads((out/'native-link-inventory.json').read_text());assert inventory['native_objects']==146 and inventory['complete'] and not inventory['forbidden_links'] and not inventory['foreign_native_objects']
+          assert not list(dist.rglob('*cudnn*')) and intel.is_file()
+          (out/'omission-verdict.json').write_text(json.dumps({'input_sha256':sha,'removed_path':'_internal/ctranslate2/cudnn64_9.dll','removed_sha256':removed_sha,'intel_runtime_unchanged':True,'subprocess_returncodes':results,'native_objects':146,'original_owner_asset_edited':False,'new_binary_uploaded':False,'hardware_acceptance':False,'rights_clearance':False},indent=2))
+          print((out/'omission-verdict.json').read_text())
           PY
+      - name: Preserve bounded diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cuDNN-omission-existing-bytes-evidence
+          path: diagnostic-evidence/
+          retention-days: 1
+          if-no-files-found: error

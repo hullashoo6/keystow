@@ -41,7 +41,7 @@ The workflow targets an Apple Silicon app named `KeyStowMac.dmg`. Confirm that i
 - Current source default for uncustomized installs: **hold Right Ctrl** while speaking, then **release** to stop and transcribe.
 - Focus the destination field first. Clipboard insertion acts on the app focused when paste is requested. Changing focus during processing can send text to a different field. Secure/elevated fields and some apps may reject paste.
 - Use the tray menu or window to choose an activation key. Avoid keys that conflict with shortcuts you depend on.
-- Close the window to hide it to the tray; choose **Quit KeyStow** in the tray menu to exit.
+- Close the window or choose **Quit KeyStow** in the tray menu to exit. Dictation stops immediately; active model work finishes cleanup before the process exits. Reopening an already-running copy raises its window instead of starting another dictation listener. Quit all older copies once before upgrading, because older releases do not use the instance guard.
 - Model loading and transcription can take time on CPU. Larger models need more storage and memory and are not automatically better for every device or utterance.
 - Existing saved key customizations (including a saved Right Ctrl selection) conservatively retain prior toggle behavior: press once to start, press again to stop. Changing a key now saves the active mode too.
 - `KEYSTOW_TOGGLE=0` explicitly selects hold; `KEYSTOW_TOGGLE=1` selects toggle. Environment mode wins over saved `activation_mode` (`hold` or `toggle`), which wins over the legacy custom-key rule. An explicit `KEYSTOW_HOTKEY` without a mode also retains legacy toggle behavior. Startup does not rewrite preferences.

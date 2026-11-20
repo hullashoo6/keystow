@@ -3,8 +3,8 @@ from pathlib import Path
 import hashlib
 import struct
 
-KEEP = {'libportaudio64bit.dll', 'libportaudio64bit-asio.dll'}
-REMOVE = {'libportaudio.dylib', 'libportaudio32bit.dll',
+KEEP = {'libportaudio64bit.dll'}
+REMOVE = {'libportaudio64bit-asio.dll', 'libportaudio.dylib', 'libportaudio32bit.dll',
           'libportaudio32bit-asio.dll', 'libportaudioarm64.dll',
           'libportaudioarm64-asio.dll'}
 
@@ -45,7 +45,9 @@ def filter_portaudio(dist, target_platform, machine, save):
     removed = []
     for entry in before:
         if Path(entry['path']).name in REMOVE:
-            removed.append(dict(entry, reason='Not loaded by sounddevice 0.5.6 Windows AMD64 fallback',
+            removed.append(dict(entry, reason=('ASIO variant excluded pending redistribution clearance'
+                if Path(entry['path']).name == 'libportaudio64bit-asio.dll'
+                else 'Not loaded by sounddevice 0.5.6 Windows AMD64 fallback'),
                 native_links_inspected=False))
     save('portaudio-filter.json', {'applied':True, 'sounddevice_version':'0.5.6',
          'kept_library_names':sorted(KEEP), 'removed':removed,

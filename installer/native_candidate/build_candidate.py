@@ -196,6 +196,23 @@ def tests_and_build(model):
         font_env = dict(env, CANDIDATE_FONT_MODE=mode)
         run(command, 'font-probe-'+mode, font_env)
     run([exe,'--candidate-ui-smoke'],'actual-entrypoint-ui',env)
+    # A non-code overlay modifies the DLL hash without changing its interfaces.
+    # This proves the packaged loader does not reject user-modified Qt libraries,
+    # not a source rebuild or blanket compliance conclusion.
+    modified_qt = WORK/'modified-qt'; shutil.copytree(dist, modified_qt, symlinks=True)
+    qt_core = modified_qt/'_internal/PySide6/Qt6Core.dll'
+    before_qt = digest(qt_core)
+    with qt_core.open('ab') as out: out.write(b'\nKEYSTOW_INTERFACE_COMPATIBLE_DLL_MODIFICATION_PROBE\n')
+    after_qt = digest(qt_core); assert before_qt != after_qt
+    qt_probe_dir = EVIDENCE/'modified-qt-probe'; qt_probe_dir.mkdir()
+    qt_env = dict(env, CANDIDATE_EVIDENCE_DIR=str(qt_probe_dir))
+    run([modified_qt/exe.name, '--candidate-ui-smoke'], 'qt-modified-library', qt_env)
+    qt_result = json.loads((qt_probe_dir/'ui-smoke.json').read_text())
+    assert qt_result['ready']
+    save('qt-modified-library.json', {'before_sha256': before_qt, 'modified_sha256': after_qt,
+         'actual_entrypoint_ready': True, 'modification': 'Non-code PE overlay, same interfaces',
+         'source_rebuild': False, 'device_acceptance': False})
+    shutil.rmtree(modified_qt)
     native_inventory(dist,exe)
     (dist/'NOT-FOR-RELEASE.txt').write_text(
        'Candidate engineering evidence only. Not installed-device, legal, sales or release clearance.\n'
@@ -283,7 +300,7 @@ def seal():
       'installed-dependencies.json','model-contract.json','fixture-source.json',
       'pristine-contract-tests.txt','runtime-regressions.txt','qt-filter-tests.txt','installed-inference.txt','icons.txt',
       'pynput-source-route.json','pynput-external-source.txt','pynput-external-source.json',
-      'pynput-replacement.txt','pynput-replacement.json',
+      'pynput-replacement.txt','pynput-replacement.json','qt-modified-library.json','qt-modified-library.txt',
       'rnnoise-download.txt','rnnoise-source.json','pyinstaller.txt','frozen-inference.txt',
       'frozen-code-substitution.txt','tampered-False.txt','tampered-True.txt',
       'actual-entrypoint-ui.txt','ready-ui.png','ui-smoke.json','candidate-archive.json',

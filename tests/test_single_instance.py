@@ -116,3 +116,29 @@ with tempfile.TemporaryDirectory() as d:
 '''
         r=subprocess.run([sys.executable,'-c',script],cwd=ROOT,env=dict(os.environ,QT_QPA_PLATFORM='offscreen'),capture_output=True,text=True,timeout=15)
         self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
+    def test_window_close_shuts_down_controller_and_process(self):
+        script='''
+from unittest.mock import patch
+import tempfile
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+from keystow import ui
+calls=[]
+class Controller:
+ def __init__(self,w):self.w=w;self.idle=False
+ def start(self):QTimer.singleShot(50,self.w.close)
+ def shutdown(self):calls.append('shutdown');QTimer.singleShot(50,self.done)
+ def done(self):self.idle=True
+ def can_exit(self):return self.idle
+ def wait_for_shutdown(self):calls.append('joined')
+with tempfile.TemporaryDirectory() as d,patch('keystow.single_instance.paths.data_dir',return_value=d),patch.object(ui.autostart,'set_enabled'),patch.object(ui.autostart,'is_enabled',return_value=False):
+ try:ui.run_app(Controller)
+ except SystemExit as exc:assert exc.code==0
+ assert calls==['shutdown','joined'],calls
+ g=__import__('keystow.single_instance',fromlist=['InstanceGuard']).InstanceGuard(d)
+ assert g.acquire(),'close left the instance lock owned'
+ g.release()
+'''
+        r=subprocess.run([sys.executable,'-c',script],cwd=ROOT,env=dict(os.environ,QT_QPA_PLATFORM='offscreen'),capture_output=True,text=True,timeout=15)
+        self.assertEqual(r.returncode,0,r.stdout+r.stderr)

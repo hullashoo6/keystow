@@ -483,9 +483,10 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def closeEvent(self, event):
-        # Closing the window hides it to the tray; use Quit in the tray menu to exit.
+        # Closing means quit, not a hidden microphone/listener in the tray.
+        # Keep Qt alive only while in-flight workers finish safely.
         event.ignore()
-        self.hide()
+        self.quit_requested.emit()
 
     def _model_changed(self, text):
         if self._on_model_change:
@@ -534,7 +535,7 @@ def run_app(controller_factory):
     import sys
 
     app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)  # keep running in the tray
+    app.setQuitOnLastWindowClosed(False)  # request_quit owns safe worker cleanup
     from .single_instance import InstanceGuard
     guard = InstanceGuard()
     try:
@@ -569,7 +570,7 @@ def run_app(controller_factory):
 
     window.quit_requested.connect(request_quit)
     shutdown_timer.timeout.connect(finish_quit_if_idle)
-    window.show()  # first launch shows the window; after that it hides to the tray
+    window.show()
     try:
         result = app.exec()
     finally:

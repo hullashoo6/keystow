@@ -13,7 +13,7 @@ UPLOAD = ROOT / 'candidate-upload'
 ARCHIVE_CAP = (250 if sys.platform == 'win32' else 220) * 1024 * 1024
 EVIDENCE_CAP = 10 * 1024 * 1024
 UPSTREAM_SHA = '79a66ad50688c0b794dd501dc340a736992a6342f7f95e5811be60b5224a26a7'
-BAD = re.compile(r'(^|[/\\.])av([/\\.]|$)|(?:avcodec|avformat|avutil|avfilter|avdevice|swresample|swscale|postproc|ffmpeg|virtualkeyboard)', re.I)
+BAD = re.compile(r'(^|[/\\.])av([/\\.]|$)|(?:avcodec|avformat|avutil|avfilter|avdevice|swresample|swscale|postproc|ffmpeg|virtualkeyboard|asio|Qt6Pdf|QtPdf.framework|[/\\]qpdf\.)', re.I)
 
 def digest(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -68,8 +68,9 @@ def stage_dependency():
          'adapted_sha256': digest(adapted), 'same_upstream_version_local_candidate': True,
          'not_published_distribution': True})
     run([sys.executable, '-m', 'pip', 'install', '--report', EVIDENCE/'resolve.json',
-         adapted, 'sounddevice>=0.4.6', 'numpy>=1.24.0', 'pynput>=1.7.6',
-         'pyperclip>=1.8.2', 'PySide6>=6.6.0', 'pyinstaller==6.16.0', 'pillow'], 'install-target')
+         *(['-c', str(HERE/'constraints-windows-b5.txt')] if sys.platform == 'win32' else []),
+         adapted, 'sounddevice==0.5.6', 'numpy==2.4.6', 'pynput==1.8.2',
+         'pyperclip==1.11.0', 'PySide6_Essentials==6.12.0', 'pyinstaller==6.16.0', 'pillow==13.0.0'], 'install-target')
     run([sys.executable, '-m', 'pip', 'check'], 'pip-check')
     assert md.version('faster-whisper') == '1.2.1'
     import importlib.util
@@ -104,7 +105,7 @@ def tests_and_build(model):
     runtime = [p.stem for p in (ROOT/'tests').glob('test_*.py')
                if p.stem not in ('test_metadata_contract','test_source_staging')]
     run([sys.executable, '-m', 'unittest', *runtime], 'runtime-regressions', env,ROOT)
-    run([sys.executable, '-m', 'unittest', 'test_virtual_keyboard_filter'], 'qt-filter-tests', env, HERE)
+    run([sys.executable, '-m', 'unittest', 'test_virtual_keyboard_filter', 'test_minimal_pdf_filter'], 'qt-filter-tests', env, HERE)
     run([sys.executable, HERE/'probe.py', '--model', model, '--sample', HERE/'sample.npy'],
         'installed-inference', env)
     # Windows RNNoise comes from the same native dependency route as the release.
@@ -130,6 +131,9 @@ def tests_and_build(model):
        '--console', '--name', 'KeyStowCandidate', '--distpath', WORK/'dist',
        '--workpath', WORK/'pyinstaller', '--specpath', WORK,
        '--additional-hooks-dir', HERE, '--paths', HERE, '--runtime-hook', HERE/'runtime_hook.py',
+       '--exclude-module','PySide6.QtPdf',
+       '--exclude-module','PySide6.QtPdfWidgets',
+       '--exclude-module','PySide6.QtPdfQuick',
        '--exclude-module','PySide6.QtVirtualKeyboard',
        '--exclude-module','PySide6.QtVirtualKeyboardQml',
        '--hidden-import','pynput.keyboard._dummy', '--hidden-import','pynput.mouse._dummy',
@@ -147,12 +151,10 @@ def tests_and_build(model):
     assert md.version('sounddevice') == '0.5.6', 'Unreviewed sounddevice loader'
     filter_portaudio(dist, sys.platform, platform.machine(), save)
     if sys.platform == 'win32':
-        for variant in ('default', 'asio'):
+        for variant in ('default',):
             audio_env = dict(env, CANDIDATE_EVIDENCE_DIR=str(EVIDENCE),
                              CANDIDATE_PORTAUDIO_VARIANT=variant)
             audio_env.pop('SD_ENABLE_ASIO', None)
-            if variant == 'asio':
-                audio_env['SD_ENABLE_ASIO'] = '1'
             run([exe,'--candidate-portaudio-probe'], 'portaudio-'+variant, audio_env)
     run([exe,'--candidate-probe'], 'frozen-inference', env)
     run([exe,'--candidate-code-substitution'], 'frozen-code-substitution', env)
@@ -265,8 +267,8 @@ def seal():
     # downloaded wheels or credentials. Upload only enumerated evidence files.
     allowed={
       'portaudio-before.json','portaudio-after.json','portaudio-filter.json',
-      'portaudio-default.json','portaudio-asio.json',
-      'portaudio-default.txt','portaudio-asio.txt',
+      'portaudio-default.json',
+      'portaudio-default.txt',
       'native-input-current.json','font-probe-source.json','font-probe-frozen.json',
       'font-probe-source.txt','font-probe-frozen.txt',
       'identity.json','build-tools.txt','download-upstream.txt','metadata-reconciliation.json',
@@ -284,10 +286,10 @@ def seal():
     for p in files:shutil.copy2(p,UPLOAD/p.name)
     archives=[p for p in EVIDENCE.iterdir() if p.name in ('KeyStowCandidate-NOT-FOR-RELEASE.zip','KeyStowCandidate-NOT-FOR-RELEASE.tar.gz')]
     assert len(archives)<=1
+    # Diagnostic run uploads metadata only, never the unresolved candidate binary.
+    # Keep native bytes confined to the ephemeral runner until release gates pass.
     if archives:
-        archive=archives[0]
-        assert archive.stat().st_size<=ARCHIVE_CAP
-        shutil.copy2(archive,UPLOAD/archive.name)
+        assert archives[0].stat().st_size <= ARCHIVE_CAP
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'],'a') as out:out.write('ready=true\n')
     print('Sealed bounded evidence',sum(p.stat().st_size for p in UPLOAD.iterdir()),'bytes')

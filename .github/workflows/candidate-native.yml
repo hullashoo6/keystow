@@ -58,9 +58,11 @@ jobs:
            dmgs=root/'mac-dmg-source';dmgs.mkdir();shutil.copytree(app,dmgs/app.name,symlinks=True);os.symlink('/Applications',dmgs/'Applications')
            dmg=root/'KeyStow-Mac-AppleSilicon-Test.dmg';run(['hdiutil','create','-volname','KeyStow Mac Test','-srcfolder',dmgs,'-ov','-format','UDZO',dmg])
            attach=run(['hdiutil','attach','-nobrowse','-readonly','-plist',dmg]);mount=next(x['mount-point'] for x in plistlib.loads(attach['stdout'].encode())['system-entities'] if 'mount-point' in x)
-           installed=root/'installed Mac test é';shutil.copytree(Path(mount)/app.name,installed,symlinks=True);run(['hdiutil','detach',mount])
+           installed=root/'installed Mac test é.app';shutil.copytree(Path(mount)/app.name,installed,symlinks=True);run(['hdiutil','detach',mount])
            run(['xattr','-w','com.apple.quarantine','0083;00000000;KeyStowTest;',installed])
            (ev/'gatekeeper-assessment.json').write_text(json.dumps(run(['spctl','--assess','--type','execute','--verbose=4',installed],False),indent=2))
+           (ev/'copied-app-signing.json').write_text(json.dumps(run(['codesign','--verify','--deep','--strict','--verbose=4',installed],False),indent=2))
+           (ev/'distribution-assessment.json').write_text(json.dumps(run(['syspolicy_check','distribution',installed],False),indent=2))
            env=dict(os.environ,QT_QPA_PLATFORM='offscreen',PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(ev))
            probes={}
            for name,arg in [('inference','--candidate-probe'),('integrity','--candidate-code-substitution'),('ready','--candidate-ui-smoke')]:

@@ -28,9 +28,10 @@ jobs:
           out=pathlib.Path('diagnostic-evidence');out.mkdir()
           draft=json.loads(subprocess.check_output(['gh','api','repos/hullashoo6/keystow/releases/452231425']))
           assert draft['draft'] and draft['id']==452231425
-          expected={'1-KeyStow-NOTICE-ADDENDUM-Qt-Mesa-LLVM-image-codecs-20261120.zip':(185323,'2886b5c0020e4574079232c70d14c9eeccc05cdbae13505818ff1216d966a795')}
+          expected={'1-KeyStow-COMPLETE-Mesa-11.2.2-LLVM-3.6.2-source-notice-supplement-20261120.zip':(20930485,'d6c27acbdd7ff00d47135a7f3d09a89ee91148d170200a29548b144f1134d87f')}
           assert next(x for x in draft['assets'] if x['id']==770297672)['digest']=='sha256:eb01efe84f8c5bf64e0873e69866e4ed82184353e2b8af096f6d735a83ac0972'
           assert next(x for x in draft['assets'] if x['id']==770303219)['digest']=='sha256:04fcc165a85add9aaa05c7708274a3413299db18a3a9c3b63a11ad2d79623887'
+          assert next(x for x in draft['assets'] if x['id']==770335028)['digest']=='sha256:2886b5c0020e4574079232c70d14c9eeccc05cdbae13505818ff1216d966a795'
           rows=[]
           for name,(size,want) in expected.items():
               asset=next(x for x in draft['assets'] if x['name']==name)
@@ -47,7 +48,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: notice-addendum-authenticated-download-evidence
+          name: complete-source-notice-authenticated-download-evidence
           path: diagnostic-evidence/
           retention-days: 1
           if-no-files-found: error

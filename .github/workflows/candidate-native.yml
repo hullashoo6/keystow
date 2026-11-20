@@ -1,12 +1,12 @@
-name: Verify actual corrected private draft downloads
+name: Private single-file installer validation - NO PUBLICATION
 on:
   workflow_dispatch:
 permissions:
   contents: write
 jobs:
-  diagnose:
+  private-installer:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         shell: bash
@@ -18,37 +18,103 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11'
-      - run: python -m pip install pefile==2023.2.7 pyinstaller==6.16.0
-      - name: Download and verify notice addendum and verify existing digests without changing either draft
+      - name: Wrap unchanged corrected bytes, install, test, uninstall and privately stage
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PYCODE'
-          import os,json,subprocess,pathlib,hashlib,urllib.request,zipfile,datetime
-          out=pathlib.Path('diagnostic-evidence');out.mkdir()
-          draft=json.loads(subprocess.check_output(['gh','api','repos/hullashoo6/keystow/releases/452231425']))
-          assert draft['draft'] and draft['id']==452231425
-          expected={'2-KeyStow-COMPLETE-Mesa-11.2.2-LLVM-3.6.2-source-notice-supplement-20261120.zip':(20930485,'d6c27acbdd7ff00d47135a7f3d09a89ee91148d170200a29548b144f1134d87f')}
-          assert next(x for x in draft['assets'] if x['id']==770297672)['digest']=='sha256:eb01efe84f8c5bf64e0873e69866e4ed82184353e2b8af096f6d735a83ac0972'
-          assert next(x for x in draft['assets'] if x['id']==770303219)['digest']=='sha256:04fcc165a85add9aaa05c7708274a3413299db18a3a9c3b63a11ad2d79623887'
-          assert next(x for x in draft['assets'] if x['id']==770335028)['digest']=='sha256:2886b5c0020e4574079232c70d14c9eeccc05cdbae13505818ff1216d966a795'
-          rows=[]
-          for name,(size,want) in expected.items():
-              asset=next(x for x in draft['assets'] if x['name']==name)
-              req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/octet-stream'})
-              start=datetime.datetime.now(datetime.timezone.utc).isoformat()
-              with urllib.request.urlopen(req,timeout=180) as response:data=response.read();status=response.status
-              digest=hashlib.sha256(data).hexdigest();assert status==200 and len(data)==size and digest==want
-              temp=pathlib.Path(name);temp.write_bytes(data)
-              with zipfile.ZipFile(temp) as z:assert z.testzip() is None;entries=len(z.namelist())
-              rows.append({'name':name,'asset_id':asset['id'],'bytes':len(data),'sha256':digest,'http_status':status,'zip_entries':entries,'started_at':start,'verified_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'url':asset['browser_download_url']})
-          (out/'authenticated-download-verdict.json').write_text(json.dumps({'draft_id':452231425,'draft_url':draft['html_url'],'mutations':False,'actual_downloads':rows},indent=2));print((out/'authenticated-download-verdict.json').read_text())
+          import pathlib,subprocess,hashlib,urllib.request,json,zipfile,os,datetime,shutil,winreg
+          root=pathlib.Path.cwd(); ev=root/'installer-evidence';ev.mkdir(); stage=root/'installer-stage';stage.mkdir();downloads=root/'downloads';downloads.mkdir()
+          def sha(b):return hashlib.sha256(b).hexdigest()
+          def api(path):return json.loads(subprocess.check_output(['gh','api',path]))
+          draft=api('repos/hullashoo6/keystow/releases/452231425');assert draft['draft']
+          expected={770297672:(242077910,'eb01efe84f8c5bf64e0873e69866e4ed82184353e2b8af096f6d735a83ac0972'),770303219:(2375250,'04fcc165a85add9aaa05c7708274a3413299db18a3a9c3b63a11ad2d79623887'),770335028:(185323,'2886b5c0020e4574079232c70d14c9eeccc05cdbae13505818ff1216d966a795'),770356114:(20930485,'d6c27acbdd7ff00d47135a7f3d09a89ee91148d170200a29548b144f1134d87f')}
+          payload=None
+          for ident,(size,digest) in expected.items():
+              a=next(x for x in draft['assets'] if x['id']==ident);assert a['size']==size and a['digest']=='sha256:'+digest
+              req=urllib.request.Request(a['url'],headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/octet-stream'})
+              b=urllib.request.urlopen(req,timeout=180).read();assert len(b)==size and sha(b)==digest
+              path=downloads/a['name'];path.write_bytes(b)
+              with zipfile.ZipFile(path) as z:
+                  assert z.testzip() is None
+                  if ident==770297672:z.extractall(stage);payload=path
+                  else:z.extractall(stage/'KeyStowCandidate'/'ThirdParty'/str(ident))
+          app=stage/'KeyStowCandidate';assert (app/'KeyStowCandidate.exe').exists()
+          sources=json.loads((app/'ThirdParty'/'770303219'/'EXACT-SOURCE-DOWNLOADS.json').read_text())
+          for src in sources:
+              if 'download.qt.io' not in src['url']:continue
+              b=urllib.request.urlopen(src['url'],timeout=180).read();assert len(b)==src['bytes'] and sha(b)==src['sha256']
+              d=app/'ThirdParty'/'corresponding-source';d.mkdir(exist_ok=True);(d/src['url'].split('/')[-1]).write_bytes(b)
+          inno_url='https://github.com/jrsoftware/issrc/releases/download/is-6_4_3/innosetup-6.4.3.exe'
+          b=urllib.request.urlopen(inno_url,timeout=120).read();assert sha(b)=='f3c42116542c4cc57263c5ba6c4feabfc49fe771f2f98a79d2f7628b8762723b';inno=downloads/'inno.exe';inno.write_bytes(b)
+          subprocess.run([str(inno),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-'],check=True)
+          (app/'INSTALL-README.txt').write_text('KeyStow private Windows test. Unsigned, optional noise suppression omitted, no cuDNN. Not device acceptance or rights/sale/public readiness. New defaults Right Ctrl and hold-to-talk; existing preferences are preserved. Close hides to tray; double-click tray to reopen. Quit from tray menu. No automatic start-at-login is registered by this installer. Source, licenses and notices are included under ThirdParty. Keep Notepad focused during dictation. Clipboard restoration preserves text only, best effort. Do not bypass Windows security warnings. Inno Setup 6.4.3 used under its supplied license.\n')
+          license_url='https://raw.githubusercontent.com/jrsoftware/issrc/is-6_4_3/license.txt';(app/'ThirdParty'/'Inno-Setup-6.4.3-LICENSE.txt').write_bytes(urllib.request.urlopen(license_url).read())
+          # Exact expected payload manifest excludes only added source/notice materials.
+          with zipfile.ZipFile(payload) as z:manifest={n.removeprefix('KeyStowCandidate/'):sha(z.read(n)) for n in z.namelist() if not n.endswith('/')}
+          iss='''[Setup]
+          AppId=KeyStowPrivateTest436e575
+          AppName=KeyStow Private Test
+          AppVersion=1.0.2.1
+          AppPublisher=KeyStow
+          DefaultDirName={localappdata}\\Programs\\KeyStowPrivateTest
+          DefaultGroupName=KeyStow Private Test
+          PrivilegesRequired=lowest
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          OutputDir=output
+          OutputBaseFilename=KeyStow-Private-Setup-436e575
+          Compression=lzma2/fast
+          SolidCompression=yes
+          WizardStyle=modern
+          DisableProgramGroupPage=yes
+          UninstallDisplayName=KeyStow Private Test
+          [Files]
+          Source: "installer-stage\\KeyStowCandidate\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          [Icons]
+          Name: "{group}\\KeyStow Private Test"; Filename: "{app}\\KeyStowCandidate.exe"
+          Name: "{group}\\Uninstall KeyStow Private Test"; Filename: "{uninstallexe}"
+          [Run]
+          Filename: "{app}\\KeyStowCandidate.exe"; Description: "Launch KeyStow Private Test"; Flags: nowait postinstall skipifsilent unchecked
+          '''
+          script=root/'private-setup.iss';script.write_text('\n'.join(x.strip() for x in iss.splitlines()))
+          iscc=pathlib.Path(os.environ.get('ProgramFiles(x86)','C:/Program Files (x86)'))/'Inno Setup 6'/'ISCC.exe';assert iscc.exists()
+          with (ev/'compile.txt').open('w') as f:subprocess.run([str(iscc),str(script)],stdout=f,stderr=subprocess.STDOUT,check=True)
+          setup=root/'output'/'KeyStow-Private-Setup-436e575.exe';assert setup.exists()
+          install=root/'installed-private-test'
+          subprocess.run([str(setup),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/DIR='+str(install),'/LOG='+str(ev/'install.log')],check=True)
+          actual={n:sha((install/n).read_bytes()) for n in manifest};assert actual==manifest
+          # Installer must not add a Run entry; do not modify any pre-existing entry.
+          value=None
+          try:
+              with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Run') as k:
+                  try:value=winreg.QueryValueEx(k,'KeyStowPrivateTest')[0]
+                  except FileNotFoundError:pass
+          except FileNotFoundError:pass
+          assert value is None
+          env=os.environ.copy();env.pop('GH_TOKEN',None);env.update(QT_QPA_PLATFORM='offscreen',PYNPUT_BACKEND='dummy',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',KEYSTOW_MODEL='base',CANDIDATE_EVIDENCE_DIR=str(ev))
+          codes={}
+          for label,arg in [('installed-inference','--candidate-probe'),('installed-integrity','--candidate-code-substitution'),('installed-entrypoint','--candidate-ui-smoke')]:
+              with (ev/(label+'.txt')).open('w') as f:r=subprocess.run([str(install/'KeyStowCandidate.exe'),arg],env=env,stdout=f,stderr=subprocess.STDOUT,timeout=180)
+              codes[label]=r.returncode;assert r.returncode==0,label
+          subprocess.run([str(install/'unins000.exe'),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG='+str(ev/'uninstall.log')],check=True)
+          assert not (install/'KeyStowCandidate.exe').exists() and not (install/'_internal').exists()
+          verdict={'source_commit':'436e575a97fb4967bbddf5d126f448ca1f02f17e','payload_sha256':expected[770297672][1],'payload_files_unchanged':len(manifest),'setup_bytes':setup.stat().st_size,'setup_sha256':sha(setup.read_bytes()),'install_hash_check':True,'uninstall_check':True,'no_autostart_registration':True,'tests':codes,'device_acceptance':False,'rights_clearance':False,'unsigned':True,'verified_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+          (ev/'installer-verdict.json').write_text(json.dumps(verdict,indent=2));shutil.copy(script,ev/'private-setup.iss')
+          # New private staging only. Do not mutate either prior draft or publish.
+          release=api('repos/hullashoo6/keystow/releases')
+          assert not any(x.get('tag_name')=='private-installer-test-20261120' for x in release)
+          subprocess.run(['gh','release','create','private-installer-test-20261120','--target','436e575a97fb4967bbddf5d126f448ca1f02f17e','--draft','--title','PRIVATE SINGLE-FILE INSTALLER TEST - DO NOT PUBLISH','--notes','Private unsigned single-file installer test. No public release or device/rights acceptance. Bundles unchanged corrected payload, all source-notice packages and exact Qt/PySide source archives.'],check=True)
+          subprocess.run(['gh','release','upload','private-installer-test-20261120',str(setup)],check=True)
+          releases=api('repos/hullashoo6/keystow/releases');rel=next(x for x in releases if x['tag_name']=='private-installer-test-20261120');assert rel['draft'];asset=next(x for x in rel['assets'] if x['name']==setup.name)
+          req=urllib.request.Request(asset['url'],headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/octet-stream'});b=urllib.request.urlopen(req,timeout=180).read();assert len(b)==verdict['setup_bytes'] and sha(b)==verdict['setup_sha256']
+          verdict.update(draft_id=rel['id'],draft_url=rel['html_url'],asset_id=asset['id'],download_url=asset['browser_download_url'],actual_authenticated_download_rehash=True);(ev/'installer-verdict.json').write_text(json.dumps(verdict,indent=2));print(json.dumps(verdict,indent=2))
           PYCODE
-      - name: Preserve bounded diagnostic evidence only
+      - name: Preserve bounded metadata only, never setup binary
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: complete-source-notice-authenticated-download-evidence
-          path: diagnostic-evidence/
+          name: private-installer-validation-evidence
+          path: installer-evidence/
           retention-days: 1
           if-no-files-found: error

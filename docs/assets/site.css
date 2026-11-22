@@ -126,7 +126,9 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--violet);outline-offs
 .note{padding:24px 24px 26px;background:var(--mist);border-radius:20px}
 .note-title{font-weight:600;font-size:17px;line-height:1.3;letter-spacing:-.01em;margin:0 0 6px}
 .note-body{margin:0;font-size:15px;line-height:1.55;color:var(--slate)}
-.back{display:inline-block;margin:44px 0 0;font-size:15px;color:var(--slate);text-underline-offset:4px}
+.help-line{margin:40px 0 0;font-size:15px;color:var(--slate)}
+.help-line a,.ruled-body a,.site-foot a{color:var(--ink);text-underline-offset:3px}
+.back{display:inline-block;margin:14px 0 0;font-size:15px;color:var(--slate);text-underline-offset:4px}
 .back:hover{color:var(--ink)}
 
 /* Narrow screens */

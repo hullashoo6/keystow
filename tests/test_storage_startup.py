@@ -101,13 +101,16 @@ class StorageStartupTest(unittest.TestCase):
                 app = QApplication([])
                 with patch.object(ui.autostart, 'set_enabled'), patch.object(ui.autostart, 'is_enabled', return_value=False):
                     w = ui.MainWindow()
-                with patch.object(ui.autostart, 'set_enabled', side_effect=OSError('registration denied')):
+                # The installed app: from source, enabling is refused outright.
+                with patch.object(ui.autostart, 'available', return_value=True), \
+                     patch.object(ui.autostart, 'set_enabled', side_effect=OSError('registration denied')):
                     w.autostart_action.setChecked(True)
                     w._toggle_autostart(True)
                 app.processEvents()
                 assert not w.autostart_action.isChecked()
                 assert 'Could not change' in w.status.text()
-                with patch.object(ui.autostart, 'set_enabled') as write:
+                with patch.object(ui.autostart, 'available', return_value=True), \
+                     patch.object(ui.autostart, 'set_enabled') as write:
                     w.autostart_action.setChecked(True)
                     w._toggle_autostart(True)
                     write.assert_called_once_with(True)

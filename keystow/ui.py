@@ -363,15 +363,8 @@ class MainWindow(QMainWindow):
         label = "Start at login" if sys.platform == "darwin" else "Start with Windows"
         self.autostart_action = QAction(label, self)
         self.autostart_action.setCheckable(True)
-        if not settings.get("autostart_initialized"):
-            # First run: default to starting at login so KeyStow is always there.
-            try:
-                autostart.set_enabled(True)
-                settings.set("autostart_initialized", True)
-            except OSError:
-                # Registration or marker persistence may fail independently.
-                # Keep UI startup usable; an absent marker remains retryable.
-                pass
+        # Start at login is the user's choice, made here or in the installer.
+        # It is never switched on silently at first run.
         self.autostart_action.setChecked(autostart.is_enabled())
         self.autostart_action.triggered.connect(self._toggle_autostart)
         menu.addAction(self.autostart_action)
@@ -467,6 +460,11 @@ class MainWindow(QMainWindow):
             self.storage_warning.show()
 
     def _toggle_autostart(self, checked):
+        if checked and not autostart.available():
+            # Run from source, the login entry would launch bare Python.
+            self.autostart_action.setChecked(False)
+            self.set_state("Start at login works in the installed app, not when run from source.")
+            return
         try:
             autostart.set_enabled(checked)
         except OSError:

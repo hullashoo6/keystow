@@ -7,6 +7,10 @@ import time
 import pyperclip
 from pynput.keyboard import Controller, Key
 
+# How long the dictated text stays on the clipboard after the paste keys are
+# sent, before the previous clipboard text is put back.
+PASTE_SETTLE_SECONDS = 0.3
+
 
 def type_text(text: str, restore_clipboard: bool = True) -> None:
     """Request clipboard paste, releasing owned keys even on dispatch failure.
@@ -41,7 +45,10 @@ def type_text(text: str, restore_clipboard: bool = True) -> None:
         held.remove("v")
         keyboard.release(modifier)
         held.remove(modifier)
-        time.sleep(0.05)
+        # The target app reads the clipboard when it handles the keystroke,
+        # not when we send it. Restoring sooner makes slower apps (Electron,
+        # browsers, remote desktops) paste the previous clipboard instead.
+        time.sleep(PASTE_SETTLE_SECONDS)
     finally:
         cleanup_error = None
         for key in reversed(held):

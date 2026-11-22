@@ -1,5 +1,6 @@
 """Configuration, overridable via environment variables."""
 
+import math
 import os
 
 # Whisper model size: tiny, base, small, medium, large-v3, turbo.
@@ -25,3 +26,21 @@ TOGGLE_MODE = os.environ.get("KEYSTOW_TOGGLE", "0") != "0"
 # Audio capture settings. 16 kHz mono is what Whisper expects.
 SAMPLE_RATE = 16000
 CHANNELS = 1
+
+
+def _seconds(name: str, default: float) -> float:
+    """Read a duration; a malformed value must not stop the app starting."""
+    try:
+        value = float(os.environ.get(name, default))
+    except ValueError:
+        return default
+    return value if math.isfinite(value) and value >= 0 else default
+
+
+# Captures shorter than this are treated as a stray tap of the key: nothing is
+# transcribed or pasted. Set KEYSTOW_MIN_SECONDS=0 to disable.
+MIN_RECORD_SECONDS = _seconds("KEYSTOW_MIN_SECONDS", 0.3)
+
+# A recording left running is stopped and transcribed at this length, so a
+# forgotten toggle cannot grow memory without bound. 0 disables the limit.
+MAX_RECORD_SECONDS = _seconds("KEYSTOW_MAX_SECONDS", 120.0)

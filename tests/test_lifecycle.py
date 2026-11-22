@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import threading
+import time
 import types
 import unittest
 from unittest.mock import Mock, patch
@@ -352,6 +353,120 @@ class LifecycleTest(unittest.TestCase):
                 self.assertEqual(self.c.recorder.starts,0)
                 self.assertEqual(self.c.recorder.stops,0)
         self.assertEqual(self.paste.call_count,3)
+
+    # --- keyboard-hook thread must never wait on slow work -----------------
+
+    def hold_state_lock(self):
+        """Occupy the state lock from another thread, as slow I/O would."""
+        held, release = threading.Event(), threading.Event()
+        def hold():
+            with self.c._state_lock:
+                held.set()
+                release.wait(3)
+        thread = threading.Thread(target=hold)
+        thread.start()
+        self.assertTrue(held.wait(2))
+        def free():
+            release.set()
+            thread.join(3)
+        self.addCleanup(free)
+        return free
+
+    def wait_for_paste(self):
+        deadline = time.monotonic() + 3
+        while self.paste.call_count < 1 and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+    def test_other_keys_never_wait_on_the_state_lock(self):
+        # The hook sees every key on the system. If an unrelated key waited
+        # here, Windows would time the hook out and silently remove it.
+        self.hold_state_lock()
+        done = threading.Event()
+        def keys():
+            for key in ['a', 'ctrl', 'v']:
+                self.c._on_press(key)
+                self.c._on_release(key)
+            done.set()
+        threading.Thread(target=keys, daemon=True).start()
+        self.assertTrue(done.wait(1), 'unrelated key blocked on the state lock')
+
+    def test_hotkey_callbacks_return_while_state_lock_is_busy(self):
+        self.c._toggle = False
+        self.c._start_dispatcher()
+        self.addCleanup(self.c.shutdown)
+        free = self.hold_state_lock()
+        key = self.c._hotkey
+        done = threading.Event()
+        def keys():
+            self.c._on_press(key)
+            self.c._on_release(key)
+            done.set()
+        threading.Thread(target=keys, daemon=True).start()
+        self.assertTrue(done.wait(1), 'hotkey callback blocked on the state lock')
+        self.assertEqual(self.c.recorder.starts, 0)  # queued, not run on the hook thread
+        free()
+        # The queued press and release then run in order, once.
+        self.wait_for_paste()
+        self.finish()
+        self.assertEqual((self.c.recorder.starts, self.c.recorder.stops), (1, 1))
+        self.paste.assert_called_once_with('second session')
+
+    def test_paste_runs_without_the_state_lock(self):
+        # The injected paste keys re-enter this app's own keyboard hook, so no
+        # other thread may be locked out while the paste is in flight.
+        seen = []
+        def paste(text):
+            def probe():
+                got = self.c._state_lock.acquire(timeout=1)
+                if got:
+                    self.c._state_lock.release()
+                seen.append(got)
+            thread = threading.Thread(target=probe)
+            thread.start()
+            thread.join(3)
+        self.paste.side_effect = paste
+        self.c._phase = 'processing'
+        self.c._transcribe_and_type('audio', self.c.transcriber)
+        self.assertEqual(seen, [True])
+        self.assertEqual(self.c._phase, 'idle')
+
+    def test_stray_tap_is_discarded_without_inference_or_paste(self):
+        import numpy as np
+        self.c._toggle = False
+        key = self.c._hotkey
+        self.c.recorder.stop = lambda: np.zeros(1600, dtype='float32')  # 0.1 s
+        self.c._on_press(key)
+        self.c._on_release(key)
+        self.assertEqual(self.c._phase, 'idle')
+        self.c.transcriber.transcribe.assert_not_called()
+        self.paste.assert_not_called()
+        self.assertFalse(hasattr(self.c, '_worker'))
+        # A real utterance straight afterwards still works.
+        self.c.recorder.stop = lambda: np.zeros(16000, dtype='float32')  # 1 s
+        self.c._on_press(key)
+        self.c._on_release(key)
+        self.finish()
+        self.paste.assert_called_once_with('second session')
+
+    def test_recording_limit_stops_and_transcribes_once(self):
+        self.c._toggle = True
+        with patch.object(self.module.config, 'MAX_RECORD_SECONDS', 0.05):
+            self.c.toggle_recording()
+            self.wait_for_paste()
+        self.finish()
+        self.assertEqual((self.c.recorder.starts, self.c.recorder.stops), (1, 1))
+        self.paste.assert_called_once_with('second session')
+
+    def test_stale_limit_timer_cannot_stop_a_later_recording(self):
+        self.c.start_recording()
+        stale = self.c._limit_token
+        self.c.stop_recording()
+        self.finish()
+        self.c.start_recording()
+        self.c._limit_reached(stale)
+        self.assertEqual(self.c._phase, 'recording')
+        self.c.stop_recording()
+        self.finish()
 
 if __name__ == '__main__':
     unittest.main()

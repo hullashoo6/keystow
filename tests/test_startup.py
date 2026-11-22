@@ -6,6 +6,7 @@ Audio, model inference and keyboard integration are deliberately not exercised.
 import os
 import subprocess
 import sys
+import tempfile
 import textwrap
 import unittest
 
@@ -60,9 +61,13 @@ class StartupTest(unittest.TestCase):
                     assert exc.code == 0, exc.code
             assert calls == ["started", "alive"], calls
         ''')
-        env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-        result = subprocess.run([sys.executable, "-c", script], env=env,
-                                capture_output=True, text=True, timeout=15)
+        # Use a private home: with the real one, a KeyStow already running on
+        # this machine owns the single-instance lock, the app under test exits
+        # at once, and the running copy is asked to raise its window.
+        with tempfile.TemporaryDirectory() as home:
+            env = dict(os.environ, QT_QPA_PLATFORM="offscreen", HOME=home, USERPROFILE=home)
+            result = subprocess.run([sys.executable, "-c", script], env=env,
+                                    capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 

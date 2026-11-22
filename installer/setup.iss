@@ -1,5 +1,5 @@
 #define MyAppName "KeyStow"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "KeyStow"
 #define MyAppExeName "KeyStow.exe"
 
@@ -24,8 +24,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Registry]
-; Start at sign-in only when the user ticks the option below. The app's own
-; tray toggle writes the same value, so Setup must not force it on upgrades.
+; Start at sign-in is a Setup option, ticked by default. Setup remembers the
+; choice on later updates. The app's own tray toggle writes the same value.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "KeyStow"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: autostart
 
 [Files]
@@ -37,7 +37,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
-Name: "autostart"; Description: "Start KeyStow when I sign in to Windows"; GroupDescription: "Startup:"; Flags: unchecked
+Name: "autostart"; Description: "Start KeyStow when I sign in to Windows"; GroupDescription: "Startup:"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch KeyStow"; Flags: nowait postinstall skipifsilent

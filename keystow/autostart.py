@@ -18,6 +18,16 @@ def available() -> bool:
     return bool(getattr(sys, "frozen", False)) and sys.platform in ("darwin", "win32")
 
 
+def enable_by_default() -> bool:
+    """True where the app itself switches start at login on at its first run.
+
+    Start at login is on by default. On Windows the installer offers it as a
+    ticked option, so the app leaves that choice alone. A Mac is installed by
+    dragging the app, with no installer to ask, so the installed app does it.
+    """
+    return available() and sys.platform == "darwin"
+
+
 if sys.platform == "darwin":
     _PLIST = os.path.expanduser("~/Library/LaunchAgents/com.keystow.app.plist")
     def is_enabled() -> bool:

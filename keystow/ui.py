@@ -363,8 +363,18 @@ class MainWindow(QMainWindow):
         label = "Start at login" if sys.platform == "darwin" else "Start with Windows"
         self.autostart_action = QAction(label, self)
         self.autostart_action.setCheckable(True)
-        # Start at login is the user's choice, made here or in the installer.
-        # It is never switched on silently at first run.
+        # Start at login is on by default and can be switched off here. The
+        # Windows installer sets it (a ticked option). The installed Mac app
+        # sets it once, at its first run; the saved marker means that turning
+        # it off afterwards stays off.
+        if autostart.enable_by_default() and not settings.get("autostart_initialized"):
+            try:
+                autostart.set_enabled(True)
+                settings.set("autostart_initialized", True)
+            except OSError:
+                # Registration or marker persistence may fail independently.
+                # Keep UI startup usable; an absent marker remains retryable.
+                pass
         self.autostart_action.setChecked(autostart.is_enabled())
         self.autostart_action.triggered.connect(self._toggle_autostart)
         menu.addAction(self.autostart_action)

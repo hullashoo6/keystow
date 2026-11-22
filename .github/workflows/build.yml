@@ -1,17 +1,49 @@
-name: Build KeyStow installers
+name: Build and release KeyStow installers
 
+# Manual only. Nothing is built or published on a push. A release happens when
+# this workflow is run from main with the version to publish, and that version
+# must already be the one written in installer/setup.iss.
 on:
-  push:
-    branches: [main]
-    paths: ['run_keystow.py', 'keystow/**', 'requirements.txt', 'installer/**', '.github/workflows/build.yml']
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish, for example 1.0.4
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: keystow-release
+  cancel-in-progress: false
+
 jobs:
-  build:
+  check:
+    name: Check version and branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse anything but a new version built from main
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 1.0.4"; exit 1; }
+          test "$GITHUB_REF" = refs/heads/main || { echo "Run this workflow from main"; exit 1; }
+          tr -d '\r' < installer/setup.iss | grep -Fxq "#define MyAppVersion \"$VERSION\"" || { echo "installer/setup.iss does not say $VERSION"; exit 1; }
+          grep -Fq "v$VERSION" installer/release-notes.md || { echo "installer/release-notes.md is not written for v$VERSION"; exit 1; }
+          existing=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v$VERSION" --jq 'length')
+          test "$existing" = 0 || { echo "A tag starting with v$VERSION already exists"; exit 1; }
+
+  build-windows:
+    name: Windows installer
+    needs: check
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,7 +52,11 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller pillow
+          pip install -r requirements.txt pyinstaller pillow psutil
+      - name: Component tests (controlled input and output, not a real microphone)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -v
       - name: Generate app icons
         run: python installer/make_icons.py
       - name: Fetch RNNoise native library
@@ -35,6 +71,8 @@ jobs:
       - name: Build KeyStow.exe with PyInstaller
         run: |
           pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer\keystow.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      - name: Packaged app must open its window, refuse a second copy and close cleanly
+        run: python installer/verify_candidate_processes.py dist/KeyStow.exe release-evidence
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer
@@ -45,89 +83,176 @@ jobs:
           name: windows-installer
           path: installer/installer/KeyStowSetup.exe
           if-no-files-found: error
+      - name: Keep the packaged-app check evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-evidence
+          path: release-evidence/
+          retention-days: 30
+          if-no-files-found: ignore
 
   build-mac:
+    name: Mac installer (Apple Silicon)
+    needs: check
     runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Require an Apple Silicon build machine
+        run: test "$(uname -m)" = arm64
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller pillow
-      - name: Generate app icons
-        run: python installer/make_icons.py
-      - name: Download bundled Whisper base model
+          pip install -r requirements.txt pyinstaller pillow psutil huggingface-hub
+      - name: Component tests (controlled input and output, not a real microphone)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -v
+      - name: Generate app icon and fetch bundled base model
         run: |
-          pip install huggingface-hub
+          python installer/make_icons.py
           python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base', local_dir='models/faster-whisper-base')"
       - name: Build KeyStow.app with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data "models/faster-whisper-base:models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
-      - name: Set macOS bundle version
+          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data 'models/faster-whisper-base:models/faster-whisper-base' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      # Editing Info.plist breaks the signature PyInstaller applied, and Apple
+      # Silicon refuses to open an app with a broken signature. Set the version
+      # first, sign afterwards, and do not touch the bundle again.
+      - name: Set the version, then ad-hoc sign with no further bundle edits
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          python -c "import plistlib; p='dist/KeyStow.app/Contents/Info.plist'; d=plistlib.load(open(p,'rb')); d.update(CFBundleShortVersionString='1.0.2', CFBundleVersion='1.0.2'); plistlib.dump(d,open(p,'wb'))"
-      - name: Create DMG
+          set -euo pipefail
+          python - <<'PY'
+          import os, plistlib
+          path = 'dist/KeyStow.app/Contents/Info.plist'
+          with open(path, 'rb') as handle:
+              info = plistlib.load(handle)
+          info.update(CFBundleShortVersionString=os.environ['VERSION'], CFBundleVersion=os.environ['VERSION'])
+          with open(path, 'wb') as handle:
+              plistlib.dump(info, handle)
+          PY
+          mkdir -p release-evidence
+          codesign --force --deep --sign - --preserve-metadata=entitlements dist/KeyStow.app
+          codesign --verify --deep --strict --verbose=4 dist/KeyStow.app 2>&1 | tee release-evidence/app-signature-verify.txt
+          codesign -d --verbose=4 dist/KeyStow.app 2>&1 | tee release-evidence/app-signature-details.txt
+          file dist/KeyStow.app/Contents/MacOS/KeyStow | tee release-evidence/architecture.txt
+      # Run a copy, so the bundle that ships is never opened before packaging.
+      # The hosted Mac cannot always drive the window, so a failure here is
+      # recorded and reported without stopping the build.
+      - name: Signed app copy should open, refuse a second copy and close cleanly
+        id: mac_launch
+        continue-on-error: true
         run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/launch-check"
+          ditto dist/KeyStow.app "$RUNNER_TEMP/launch-check/KeyStow.app"
+          python installer/verify_candidate_processes.py "$RUNNER_TEMP/launch-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence
+      - name: Record the Mac launch check result
+        if: always()
+        env:
+          OUTCOME: ${{ steps.mac_launch.outcome }}
+        run: echo "Mac launch check on the signed app copy - $OUTCOME" | tee -a "$GITHUB_STEP_SUMMARY" release-evidence/mac-launch-check.txt
+      - name: Package the DMG and verify the app inside the mounted image
+        run: |
+          set -euo pipefail
           mkdir -p dist/dmg
-          cp -R dist/KeyStow.app dist/dmg/
+          ditto dist/KeyStow.app dist/dmg/KeyStow.app
+          codesign --verify --deep --strict --verbose=4 dist/dmg/KeyStow.app
           hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
+          hdiutil verify dist/KeyStowMac.dmg 2>&1 | tee release-evidence/dmg-verify.txt
+          mkdir -p "$RUNNER_TEMP/keystow-mounted"
+          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/keystow-mounted" dist/KeyStowMac.dmg
+          trap 'hdiutil detach "$RUNNER_TEMP/keystow-mounted"' EXIT
+          codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/keystow-mounted/KeyStow.app" 2>&1 | tee release-evidence/mounted-app-signature-verify.txt
+          python -c "import plistlib,sys; print(plistlib.load(open(sys.argv[1],'rb'))['CFBundleShortVersionString'])" "$RUNNER_TEMP/keystow-mounted/KeyStow.app/Contents/Info.plist" | tee release-evidence/mounted-app-version.txt
       - name: Stage Mac installer
         uses: actions/upload-artifact@v4
         with:
           name: mac-installer
           path: dist/KeyStowMac.dmg
           if-no-files-found: error
+      - name: Keep the signing and launch check evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-evidence
+          path: release-evidence/
+          retention-days: 30
+          if-no-files-found: ignore
 
   publish:
+    name: Publish the release
+    needs: [check, build-windows, build-mac]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
-    needs: [build, build-mac]
-    runs-on: ubuntu-latest
     steps:
-      - name: Create absent exact-commit lightweight tag after dispatch approval
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag_sha=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v1.0.2" --jq '.[] | select(.ref == "refs/tags/v1.0.2") | .object.sha')
-          if [ -n "$tag_sha" ]; then
-            test "$tag_sha" = "$GITHUB_SHA"
-          else
-            gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/v1.0.2 -f sha="$GITHUB_SHA"
-          fi
-          tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/v1.0.2" --jq '.object.sha')
-          test "$tag_sha" = "$GITHUB_SHA"
       - uses: actions/checkout@v4
-      - name: Download this run's Windows artifact
+      - name: Download this run's Windows installer
         uses: actions/download-artifact@v4
         with:
           name: windows-installer
           path: installers
-      - name: Download this run's Mac artifact
+      - name: Download this run's Mac installer
         uses: actions/download-artifact@v4
         with:
           name: mac-installer
           path: installers
-      - name: Verify both artifacts exist
-        run: |
-          test -s installers/KeyStowSetup.exe
-          test -s installers/KeyStowMac.dmg
-          sha256sum installers/KeyStowSetup.exe installers/KeyStowMac.dmg
-      - name: Publish new patch release without overwriting assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        shell: bash
+      - name: Check both installers arrived
         run: |
           set -euo pipefail
-          tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/v1.0.2" --jq '.object.sha')
-          test "$tag_sha" = "$GITHUB_SHA"
-          gh release create v1.0.2 --draft installers/KeyStowSetup.exe installers/KeyStowMac.dmg --verify-tag --title "KeyStow v1.0.2" --notes "Local voice typing for Windows and Apple Silicon Mac. Recovery update: paste-key cleanup and conditional clipboard restoration, best-effort local diagnostic logging, retryable login registration, safe Mac login-file serialization and replacement, and bounded startup-storage recovery with a visible warning and retry after user repair. Hold-to-speak remains the default for uncustomized installs; explicit modes and legacy custom keys are preserved. Built and component-tested; installed microphone, global shortcut, paste and real Mac login acceptance remain unverified. Clipboard insertion remains focus-dependent and restoration preserves text only. Download the installer for your platform. These downloads provide the installers directly. No payment is collected."
-          gh api "repos/$GH_REPO/releases/tags/v1.0.2" > draft-release.json
-          python installer/verify_release_assets.py draft-release.json installers
-          gh release edit v1.0.2 --draft=false --latest --verify-tag
+          test -s installers/KeyStowSetup.exe
+          test -s installers/KeyStowMac.dmg
+          sha256sum installers/KeyStowSetup.exe installers/KeyStowMac.dmg | tee -a "$GITHUB_STEP_SUMMARY"
+      # Upload as a draft first. The release only becomes public after GitHub's
+      # stored size and SHA-256 for each file match the files built in this run.
+      # Earlier releases and their download links are never touched.
+      - name: Upload as a draft, compare what GitHub stored, then publish
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "A release for $tag already exists; refusing to overwrite it"
+            exit 1
+          fi
+          published=0
+          cleanup() {
+            if [ "$published" = 0 ]; then
+              echo "Removing the unpublished draft"
+              gh release delete "$tag" --yes || true
+            fi
+          }
+          trap cleanup EXIT
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "KeyStow $tag" --notes-file installer/release-notes.md installers/KeyStowSetup.exe installers/KeyStowMac.dmg
+          gh api "repos/$GH_REPO/releases?per_page=30" > releases.json
+          python3 - "$tag" <<'PY'
+          import hashlib, json, pathlib, sys
+          tag = sys.argv[1]
+          drafts = [r for r in json.load(open('releases.json')) if r.get('draft') and r.get('tag_name') == tag]
+          assert len(drafts) == 1, f'expected one draft for {tag}, found {len(drafts)}'
+          assets = {a['name']: a for a in drafts[0]['assets']}
+          assert set(assets) == {'KeyStowSetup.exe', 'KeyStowMac.dmg'}, sorted(assets)
+          for name, asset in assets.items():
+              data = pathlib.Path('installers', name).read_bytes()
+              assert asset.get('state') == 'uploaded', (name, asset.get('state'))
+              assert asset.get('size') == len(data), (name, asset.get('size'), len(data))
+              assert asset.get('digest') == 'sha256:' + hashlib.sha256(data).hexdigest(), (name, asset.get('digest'))
+              print(f'{name}: size and SHA-256 match the built file')
+          PY
+          gh release edit "$tag" --draft=false --latest
+          published=1
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"
+          echo "Published $tag from $GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY"

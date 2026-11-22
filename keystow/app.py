@@ -1,12 +1,14 @@
 """KeyStow controller: one recording, model load or transcription at a time."""
 
 import logging
+import os
 import queue
+import sys
 import threading
 
 from pynput import keyboard
 
-from . import config, crashlog, settings, stats
+from . import __version__, cleanup, config, crashlog, settings, stats
 from .recorder import PushToTalkRecorder
 from .transcriber import Transcriber
 from .typer import type_text
@@ -45,6 +47,7 @@ class VoiceController:
         self._closing = False
         self._listener = None
         self._hotkey_down = False
+        self._hotkey_blocked = False  # macOS has not allowed global key access
         self._capturing = False
         self._toggle = settings.toggle_mode()
         self._hotkey_name = settings.get("hotkey", config.HOTKEY)
@@ -66,6 +69,49 @@ class VoiceController:
             on_press=self._on_press, on_release=self._on_release
         )
         self._listener.start()
+        self._watch_hotkey_access()
+        self._remove_leftovers()
+
+    def _watch_hotkey_access(self):
+        """Tell a Mac user when the system is silently withholding the shortcut.
+
+        macOS delivers global keys only to apps allowed under Accessibility,
+        and reports nothing when it does not. The listener records whether the
+        process is trusted shortly after it starts.
+        """
+        if sys.platform != "darwin":
+            return
+
+        def check():
+            try:
+                trusted = getattr(self._listener, "IS_TRUSTED", True)
+                if trusted is not False:
+                    return
+                with self._state_lock:
+                    self._hotkey_blocked = True
+                    if self._phase == "idle" and not self._closing:
+                        self.window.set_state(self._ready_message())
+            except Exception:
+                logging.exception("shortcut access check failed")
+
+        timer = threading.Timer(3.0, check)
+        timer.daemon = True
+        timer.start()
+
+    def _remove_leftovers(self):
+        """Clear unpacked copies that earlier single-file builds left in temp."""
+        if not getattr(sys, "frozen", False) or sys.platform != "win32":
+            return
+
+        def run():
+            try:
+                removed = cleanup.remove_leftover_unpack_dirs()
+                if removed:
+                    logging.info("removed %s leftover unpack folder(s) from earlier versions", removed)
+            except Exception:
+                logging.exception("leftover cleanup failed")
+
+        threading.Thread(target=run, daemon=True, name="keystow-cleanup").start()
 
     def _start_dispatcher(self):
         """Run hotkey actions on their own thread, not the keyboard-hook thread.
@@ -205,8 +251,36 @@ class VoiceController:
             self.window.set_state(f"Model failed to load: {message}. {recovery}", busy=False)
 
     def _ready_message(self):
+        if self._hotkey_blocked:
+            return ("Your Mac is blocking the shortcut. Allow KeyStow under System Settings > "
+                    "Privacy & Security > Accessibility, then quit and reopen KeyStow.")
         verb = "Press" if self._toggle else "Hold"
         return f"Ready. {verb} [{self._label}] anywhere to speak."
+
+    @staticmethod
+    def _silent(audio) -> bool:
+        """True when every sample is exactly zero: a muted or blocked microphone.
+
+        A working microphone always carries some noise. macOS in particular
+        hands an app silence, with no error, until the user allows the
+        microphone.
+        """
+        size = getattr(audio, "size", None)
+        if not isinstance(size, int) or size == 0:
+            return False
+        try:
+            return not bool(audio.any())
+        except Exception:
+            return False
+
+    @staticmethod
+    def _silence_message() -> str:
+        if sys.platform == "darwin":
+            where = "System Settings > Privacy & Security > Microphone"
+        else:
+            where = "Settings > Privacy & security > Microphone"
+        return ("No sound reached KeyStow. Check that your microphone is not muted "
+                f"and that KeyStow is allowed to use it ({where}).")
 
     def start_recording(self):
         with self._state_lock:
@@ -241,6 +315,12 @@ class VoiceController:
                     hint = "Press" if self._toggle else "Hold"
                     self.window.set_state(
                         f"Too short - nothing typed. {hint} [{self._label}] and speak.", busy=False)
+                    return
+                if self._silent(audio):
+                    # Nothing was captured at all, so the model has nothing to
+                    # hear. Say why instead of "didn't catch that".
+                    self._phase = "idle"
+                    self.window.set_state(self._silence_message(), busy=False)
                     return
                 model = self.transcriber
                 self.window.set_state("Transcribing...", busy=True)
@@ -392,6 +472,63 @@ class VoiceController:
                     self.window.set_state(result, busy=False)
 
 
+def _self_test(arguments) -> int:
+    """Release-build check of the packaged app: load the shipped model, run it.
+
+    Opens no window and uses no microphone, shortcut or network. Exit code 0
+    means the speech model inside the package loaded and turned one second of
+    silence into no text, and on Windows that the noise-suppression library
+    loaded. The release workflow runs this on the built app before publishing.
+    """
+    import json
+    import platform
+
+    report = {"ok": False, "version": __version__, "frozen": bool(getattr(sys, "frozen", False)),
+              "platform": sys.platform, "machine": platform.machine()}
+    code = 1
+    try:
+        import numpy as np
+
+        from . import denoise
+        from .transcriber import _resolve_model
+
+        source = _resolve_model(config.MODEL_SIZE)
+        report["model_source"] = source
+        report["model_bundled"] = os.path.isdir(source)
+        if report["frozen"] and not report["model_bundled"]:
+            raise RuntimeError("the packaged app does not contain its speech model")
+        model = Transcriber()
+        text = model.transcribe(np.zeros(config.SAMPLE_RATE, dtype="float32"))
+        report["silence_text"] = text
+        report["noise_suppression_native"] = denoise._denoiser is not None and not denoise._unavailable
+        if text != "":
+            raise RuntimeError("silence produced text")
+        if report["frozen"] and sys.platform == "win32" and not report["noise_suppression_native"]:
+            raise RuntimeError("the noise-suppression library did not load")
+        for argument in arguments:
+            if argument.startswith("--self-test-audio="):
+                from faster_whisper import decode_audio
+
+                speech = decode_audio(argument.split("=", 1)[1], sampling_rate=config.SAMPLE_RATE)
+                report["speech_text"] = model.transcribe(speech)
+                if not report["speech_text"]:
+                    raise RuntimeError("the speech sample produced no text")
+        report["ok"] = True
+        code = 0
+    except Exception as exc:  # noqa: BLE001
+        report["error"] = f"{type(exc).__name__}: {exc}"
+    for argument in arguments:
+        if argument.startswith("--self-test-out="):
+            try:
+                with open(argument.split("=", 1)[1], "w", encoding="utf-8") as handle:
+                    json.dump(report, handle, indent=2)
+            except OSError:
+                pass
+    return code
+
+
 def main() -> None:
+    if "--self-test" in sys.argv[1:]:
+        sys.exit(_self_test(sys.argv[1:]))
     crashlog.setup()
     run_app(VoiceController)

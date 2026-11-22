@@ -442,11 +442,52 @@ class LifecycleTest(unittest.TestCase):
         self.paste.assert_not_called()
         self.assertFalse(hasattr(self.c, '_worker'))
         # A real utterance straight afterwards still works.
-        self.c.recorder.stop = lambda: np.zeros(16000, dtype='float32')  # 1 s
+        self.c.recorder.stop = lambda: np.full(16000, 0.1, dtype='float32')  # 1 s
         self.c._on_press(key)
         self.c._on_release(key)
         self.finish()
         self.paste.assert_called_once_with('second session')
+
+    def test_dead_silent_capture_explains_the_microphone_instead_of_transcribing(self):
+        import numpy as np
+        self.c._toggle = False
+        key = self.c._hotkey
+        # Exact zeros for a whole second: a muted or blocked microphone.
+        self.c.recorder.stop = lambda: np.zeros(16000, dtype='float32')
+        self.c._on_press(key)
+        self.c._on_release(key)
+        self.assertEqual(self.c._phase, 'idle')
+        self.c.transcriber.transcribe.assert_not_called()
+        self.paste.assert_not_called()
+        message = self.window.set_state.call_args.args[0]
+        self.assertIn('No sound reached KeyStow', message)
+        self.assertIn('Microphone', message)
+        # Quiet but real audio is still transcribed.
+        quiet = np.zeros(16000, dtype='float32')
+        quiet[8000] = 0.001
+        self.c.recorder.stop = lambda: quiet
+        self.c._on_press(key)
+        self.c._on_release(key)
+        self.finish()
+        self.paste.assert_called_once_with('second session')
+
+    def test_blocked_mac_shortcut_replaces_the_ready_message(self):
+        self.assertIn('anywhere to speak', self.c._ready_message())
+        self.c._hotkey_blocked = True
+        message = self.c._ready_message()
+        self.assertIn('Accessibility', message)
+        self.assertNotIn('anywhere to speak', message)
+
+    def test_self_test_flag_runs_the_check_and_never_opens_the_app(self):
+        with patch.object(self.module.sys, 'argv', ['KeyStow', '--self-test', '--self-test-out=report.json']), \
+             patch.object(self.module, '_self_test', return_value=7) as check, \
+             patch.object(self.module.crashlog, 'setup') as logging_setup:
+            with self.assertRaises(SystemExit) as stopped:
+                self.module.main()
+        self.assertEqual(stopped.exception.code, 7)
+        check.assert_called_once_with(['--self-test', '--self-test-out=report.json'])
+        self.module.run_app.assert_not_called()
+        logging_setup.assert_not_called()
 
     def test_recording_limit_stops_and_transcribes_once(self):
         self.c._toggle = True

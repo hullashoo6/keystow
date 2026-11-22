@@ -2,6 +2,7 @@
 
 import math
 import os
+import sys
 
 # Whisper model size: tiny, base, small, medium, large-v3, turbo.
 # "base" is bundled with the installer and is a good speed/accuracy tradeoff
@@ -20,7 +21,9 @@ LANGUAGE = os.environ.get("KEYSTOW_LANGUAGE", "en")
 # Hotkey (pynput key name). New/default installs hold to speak, release to type.
 # KEYSTOW_TOGGLE=1 opts into toggle; 0 explicitly selects hold.
 # settings.toggle_mode() also preserves existing explicit customizations.
-HOTKEY = os.environ.get("KEYSTOW_HOTKEY", "ctrl_r")
+# MacBook keyboards have no Right Ctrl, so a Mac defaults to Right Option.
+DEFAULT_HOTKEY = "alt_r" if sys.platform == "darwin" else "ctrl_r"
+HOTKEY = os.environ.get("KEYSTOW_HOTKEY", DEFAULT_HOTKEY)
 TOGGLE_MODE = os.environ.get("KEYSTOW_TOGGLE", "0") != "0"
 
 # Audio capture settings. 16 kHz mono is what Whisper expects.

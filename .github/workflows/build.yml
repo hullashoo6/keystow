@@ -2,12 +2,12 @@ name: Build and release KeyStow installers
 
 # Manual only. Nothing is built or published on a push. A release happens when
 # this workflow is run from main with the version to publish, and that version
-# must already be the one written in installer/setup.iss.
+# must already be the one written in installer/setup.iss and keystow/__init__.py.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish, for example 1.0.4
+        description: Version to publish, for example 1.0.6
         required: true
         type: string
 
@@ -17,6 +17,11 @@ permissions:
 concurrency:
   group: keystow-release
   cancel-in-progress: false
+
+env:
+  # The speech model that ships inside the app, pinned to an exact revision.
+  MODEL_REPO: Systran/faster-whisper-base
+  MODEL_REVISION: ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66
 
 jobs:
   check:
@@ -32,9 +37,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 1.0.4"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 1.0.6"; exit 1; }
           test "$GITHUB_REF" = refs/heads/main || { echo "Run this workflow from main"; exit 1; }
           tr -d '\r' < installer/setup.iss | grep -Fxq "#define MyAppVersion \"$VERSION\"" || { echo "installer/setup.iss does not say $VERSION"; exit 1; }
+          tr -d '\r' < keystow/__init__.py | grep -Fxq "__version__ = \"$VERSION\"" || { echo "keystow/__init__.py does not say $VERSION"; exit 1; }
           grep -Fq "v$VERSION" installer/release-notes.md || { echo "installer/release-notes.md is not written for v$VERSION"; exit 1; }
           existing=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v$VERSION" --jq 'length')
           test "$existing" = 0 || { echo "A tag starting with v$VERSION already exists"; exit 1; }
@@ -43,16 +49,16 @@ jobs:
     name: Windows installer
     needs: check
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install Python dependencies
+      - name: Install Python dependencies at the pinned versions
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller pillow psutil
+          pip install -r requirements.txt pyinstaller pillow psutil huggingface-hub -c installer/constraints.txt
       - name: Component tests (controlled input and output, not a real microphone)
         env:
           QT_QPA_PLATFORM: offscreen
@@ -64,15 +70,23 @@ jobs:
           pip download pyrnnoise==0.4.5 --no-deps --platform win_amd64 --python-version 3.11 --only-binary :all: -d vendor_dl
           python -c "import zipfile,glob; z=zipfile.ZipFile(glob.glob('vendor_dl/*.whl')[0]); z.extract('pyrnnoise-0.4.5.data/purelib/pyrnnoise/rnnoise.dll','vendor_dl')"
           copy vendor_dl\pyrnnoise-0.4.5.data\purelib\pyrnnoise\rnnoise.dll keystow\vendor\rnnoise.dll
-      - name: Download bundled Whisper base model
+      - name: Download the bundled speech model at its pinned revision
+        run: python -c "import os; from huggingface_hub import snapshot_download; snapshot_download(os.environ['MODEL_REPO'], revision=os.environ['MODEL_REVISION'], local_dir='models/faster-whisper-base')"
+      # A folder build: KeyStow.exe plus an _internal folder of ordinary files.
+      # The earlier single-file build unpacked about 500 MB into the temp folder
+      # at every start and left it behind after an unclean exit.
+      - name: Build the KeyStow folder with PyInstaller
         run: |
-          pip install huggingface-hub
-          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base', local_dir='models/faster-whisper-base')"
-      - name: Build KeyStow.exe with PyInstaller
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer\keystow.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      - name: Check the folder has the app, the speech model and the noise library
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer\keystow.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          foreach ($path in 'dist\KeyStow\KeyStow.exe', 'dist\KeyStow\_internal\models\faster-whisper-base\model.bin', 'dist\KeyStow\_internal\keystow\vendor\rnnoise.dll') {
+            if (-not (Test-Path $path)) { throw "Missing from the build: $path" }
+          }
+      - name: Packaged app must load its own model and recognise the speech sample
+        run: python installer/verify_self_test.py dist/KeyStow/KeyStow.exe release-evidence
       - name: Packaged app must open its window, refuse a second copy and close cleanly
-        run: python installer/verify_candidate_processes.py dist/KeyStow.exe release-evidence
+        run: python installer/verify_candidate_processes.py dist/KeyStow/KeyStow.exe release-evidence
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer
@@ -96,7 +110,7 @@ jobs:
     name: Mac installer (Apple Silicon)
     needs: check
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -107,25 +121,31 @@ jobs:
           python-version: '3.11'
       - name: Require an Apple Silicon build machine
         run: test "$(uname -m)" = arm64
-      - name: Install Python dependencies
+      - name: Install Python dependencies at the pinned versions
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller pillow psutil huggingface-hub
+          pip install -r requirements.txt pyinstaller pillow psutil huggingface-hub -c installer/constraints.txt
       - name: Component tests (controlled input and output, not a real microphone)
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
-      - name: Generate app icon and fetch bundled base model
+      - name: Generate app icon and fetch the bundled speech model at its pinned revision
         run: |
           python installer/make_icons.py
-          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base', local_dir='models/faster-whisper-base')"
+          python -c "import os; from huggingface_hub import snapshot_download; snapshot_download(os.environ['MODEL_REPO'], revision=os.environ['MODEL_REVISION'], local_dir='models/faster-whisper-base')"
+      # A normal app bundle with its files inside it, not a single file that
+      # unpacks itself into the temp folder at every start.
       - name: Build KeyStow.app with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data 'models/faster-whisper-base:models/faster-whisper-base' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
-      # Editing Info.plist breaks the signature PyInstaller applied, and Apple
-      # Silicon refuses to open an app with a broken signature. Set the version
-      # first, sign afterwards, and do not touch the bundle again.
-      - name: Set the version, then ad-hoc sign with no further bundle edits
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          test -x dist/KeyStow.app/Contents/MacOS/KeyStow
+          test -n "$(find dist/KeyStow.app -type f -path '*models/faster-whisper-base/model.bin' -print -quit)"
+      # macOS gives an app no microphone audio, and shows no permission prompt,
+      # unless Info.plist says why the app wants the microphone. Editing
+      # Info.plist breaks the signature PyInstaller applied, and Apple Silicon
+      # refuses to open an app with a broken signature: edit first, sign
+      # afterwards, and do not touch the bundle again.
+      - name: Set the version and microphone reason, then ad-hoc sign with no further bundle edits
         env:
           VERSION: ${{ inputs.version }}
         run: |
@@ -135,51 +155,73 @@ jobs:
           path = 'dist/KeyStow.app/Contents/Info.plist'
           with open(path, 'rb') as handle:
               info = plistlib.load(handle)
-          info.update(CFBundleShortVersionString=os.environ['VERSION'], CFBundleVersion=os.environ['VERSION'])
+          info.update(
+              CFBundleShortVersionString=os.environ['VERSION'],
+              CFBundleVersion=os.environ['VERSION'],
+              CFBundleIdentifier='com.keystow.app',
+              NSMicrophoneUsageDescription='KeyStow listens while you hold your shortcut and turns your speech into text on this Mac. Audio is not saved or sent anywhere.',
+          )
           with open(path, 'wb') as handle:
               plistlib.dump(info, handle)
           PY
           mkdir -p release-evidence
           codesign --force --deep --sign - --preserve-metadata=entitlements dist/KeyStow.app
-          codesign --verify --deep --strict --verbose=4 dist/KeyStow.app 2>&1 | tee release-evidence/app-signature-verify.txt
+          codesign --verify --deep --strict --verbose=2 dist/KeyStow.app 2>&1 | tee release-evidence/app-signature-verify.txt
           codesign -d --verbose=4 dist/KeyStow.app 2>&1 | tee release-evidence/app-signature-details.txt
           file dist/KeyStow.app/Contents/MacOS/KeyStow | tee release-evidence/architecture.txt
-      # Run a copy, so the bundle that ships is never opened before packaging.
+      # Both checks run a copy, so the bundle that ships is never opened before
+      # packaging. The first one stops the release if it fails.
+      - name: Signed app copy must load its own model and recognise the speech sample
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/app-check"
+          ditto dist/KeyStow.app "$RUNNER_TEMP/app-check/KeyStow.app"
+          python installer/verify_self_test.py "$RUNNER_TEMP/app-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence
       # The hosted Mac cannot always drive the window, so a failure here is
       # recorded and reported without stopping the build.
       - name: Signed app copy should open, refuse a second copy and close cleanly
         id: mac_launch
         continue-on-error: true
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/launch-check"
-          ditto dist/KeyStow.app "$RUNNER_TEMP/launch-check/KeyStow.app"
-          python installer/verify_candidate_processes.py "$RUNNER_TEMP/launch-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence
+        run: python installer/verify_candidate_processes.py "$RUNNER_TEMP/app-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence
       - name: Record the Mac launch check result
         if: always()
         env:
           OUTCOME: ${{ steps.mac_launch.outcome }}
-        run: echo "Mac launch check on the signed app copy - $OUTCOME" | tee -a "$GITHUB_STEP_SUMMARY" release-evidence/mac-launch-check.txt
+        run: |
+          mkdir -p release-evidence
+          echo "Mac launch check on the signed app copy - $OUTCOME" | tee -a "$GITHUB_STEP_SUMMARY" release-evidence/mac-launch-check.txt
       - name: Package the DMG and verify the app inside the mounted image
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           mkdir -p dist/dmg
           ditto dist/KeyStow.app dist/dmg/KeyStow.app
-          codesign --verify --deep --strict --verbose=4 dist/dmg/KeyStow.app
+          ln -s /Applications dist/dmg/Applications
+          codesign --verify --deep --strict dist/dmg/KeyStow.app
           hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
           hdiutil verify dist/KeyStowMac.dmg 2>&1 | tee release-evidence/dmg-verify.txt
           mkdir -p "$RUNNER_TEMP/keystow-mounted"
           hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/keystow-mounted" dist/KeyStowMac.dmg
           trap 'hdiutil detach "$RUNNER_TEMP/keystow-mounted"' EXIT
-          codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/keystow-mounted/KeyStow.app" 2>&1 | tee release-evidence/mounted-app-signature-verify.txt
-          python -c "import plistlib,sys; print(plistlib.load(open(sys.argv[1],'rb'))['CFBundleShortVersionString'])" "$RUNNER_TEMP/keystow-mounted/KeyStow.app/Contents/Info.plist" | tee release-evidence/mounted-app-version.txt
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/keystow-mounted/KeyStow.app" 2>&1 | tee release-evidence/mounted-app-signature-verify.txt
+          python - "$RUNNER_TEMP/keystow-mounted/KeyStow.app/Contents/Info.plist" <<'PY' | tee release-evidence/mounted-app-info.txt
+          import os, plistlib, sys
+          with open(sys.argv[1], 'rb') as handle:
+              info = plistlib.load(handle)
+          assert info['CFBundleShortVersionString'] == os.environ['VERSION'], info['CFBundleShortVersionString']
+          assert info.get('NSMicrophoneUsageDescription'), 'the microphone reason is missing'
+          print('version', info['CFBundleShortVersionString'])
+          print('identifier', info['CFBundleIdentifier'])
+          print('microphone reason present')
+          PY
       - name: Stage Mac installer
         uses: actions/upload-artifact@v4
         with:
           name: mac-installer
           path: dist/KeyStowMac.dmg
           if-no-files-found: error
-      - name: Keep the signing and launch check evidence
+      - name: Keep the signing and app check evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:

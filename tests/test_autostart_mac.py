@@ -25,7 +25,7 @@ class MacLoginFileTest(unittest.TestCase):
             with patch('sys.executable', executable):
                 module.set_enabled(True)
             data = plistlib.loads(Path(module._PLIST).read_bytes())
-            self.assertEqual(data['ProgramArguments'], [executable])
+            self.assertEqual(data['ProgramArguments'], [executable, '--startup'])
             self.assertTrue(data['RunAtLoad'])
             self.assertTrue(module.is_enabled())
             with patch('sys.executable', executable):
@@ -80,6 +80,40 @@ class MacLoginFileTest(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in Path(home).iterdir()), ['keystow.plist'])
             module.set_enabled(True)
             self.assertTrue(module.is_enabled())
+
+    def test_refresh_updates_an_older_entry_but_never_creates_one(self):
+        module = mac_module()
+        executable = '/Applications/KeyStow.app/Contents/MacOS/KeyStow'
+        with tempfile.TemporaryDirectory() as home, \
+             patch('sys.platform', 'darwin'), \
+             patch('sys.executable', executable), \
+             patch('sys.frozen', True, create=True):
+            module._PLIST = str(Path(home) / 'keystow.plist')
+            # Start at login is off: nothing may appear.
+            module.refresh()
+            self.assertFalse(Path(module._PLIST).exists())
+            # An entry from an earlier version: no startup argument, old path.
+            Path(module._PLIST).write_bytes(plistlib.dumps(
+                {'Label': 'com.keystow.app', 'ProgramArguments': ['/old/KeyStow'], 'RunAtLoad': True}))
+            module.refresh()
+            data = plistlib.loads(Path(module._PLIST).read_bytes())
+            self.assertEqual(data['ProgramArguments'], [executable, '--startup'])
+            # Already current: left byte for byte as it is.
+            before = Path(module._PLIST).read_bytes()
+            with patch.object(module, 'set_enabled') as rewrite:
+                module.refresh()
+            rewrite.assert_not_called()
+            self.assertEqual(Path(module._PLIST).read_bytes(), before)
+
+    def test_refresh_does_nothing_when_run_from_source(self):
+        module = mac_module()
+        with tempfile.TemporaryDirectory() as home, patch('sys.platform', 'darwin'):
+            module._PLIST = str(Path(home) / 'keystow.plist')
+            original = plistlib.dumps(
+                {'Label': 'com.keystow.app', 'ProgramArguments': ['/old/KeyStow'], 'RunAtLoad': True})
+            Path(module._PLIST).write_bytes(original)
+            module.refresh()
+            self.assertEqual(Path(module._PLIST).read_bytes(), original)
 
     def test_invalid_file_is_not_reported_enabled(self):
         module = mac_module()

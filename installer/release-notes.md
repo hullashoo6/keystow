@@ -1,11 +1,11 @@
-KeyStow v1.0.5 starts when you sign in by default, and includes the v1.0.4 fixes.
+KeyStow v1.0.6 installs as an ordinary app, starts quietly at sign-in, and fixes the Mac setup.
 
-- Start at sign-in is on by default. On Windows it is a ticked option in the installer, and the installer remembers your choice on later updates. On Mac the app switches it on once, the first time it runs. To stop KeyStow starting at sign-in, switch it off from the KeyStow tray or menu bar icon; it stays off.
-- The activation key no longer waits on microphone, disk or paste work, so it should not stall or stop responding after a dictation.
-- A tap shorter than 0.3 seconds is ignored instead of being transcribed, and a recording left running stops at 120 seconds.
-- Your previous clipboard text is put back 0.3 seconds after the paste instead of 0.05 seconds, so slower apps paste the dictated text and not the old clipboard.
-- New Windows installs go to your per-user Programs folder. Existing installs stay where they are.
+- No more unpacking at every start. Earlier versions unpacked about 500 MB into the temp folder each time they started, and could leave it behind after a shutdown, an update or a crash. KeyStow is now installed as normal files and starts faster. On Windows it also removes the folders earlier versions left behind.
+- Started at sign-in, KeyStow now opens minimised instead of on top of your work. Opening it yourself shows the window as before. Closing the window still quits KeyStow.
+- Mac: the app now carries the microphone permission entry macOS requires, so it can ask for microphone access. The window explains the Accessibility permission that the shortcut and pasting need, and says so when macOS is blocking the shortcut. The default key on a Mac is now Right Option, because MacBook keyboards have no Right Ctrl; a key you chose yourself is kept. The disk image includes an Applications shortcut for drag-install.
+- If no sound at all reaches KeyStow from the microphone, it now says so and points to the microphone setting.
+- The version number is shown at the top of the tray menu.
 
-Quit KeyStow before installing the update. The Windows x64 and Apple Silicon Mac installers include the base model. The Windows installer is unsigned; the Mac app is ad-hoc signed and not notarized.
+Quit KeyStow before installing the update. KeyStow understands English. The Windows x64 and Apple Silicon Mac installers include the base model. The Windows installer is unsigned; the Mac app is ad-hoc signed and not notarized.
 
-Component tests passed on Windows and macOS for this build, and the packaged Windows and Mac apps passed launch, second-launch and close checks on the build machines. Physical microphone, global shortcut and paste behaviour were not tested on real hardware before release. v1.0.3 stays available if you need to go back.
+Checks on this build: component tests passed on Windows and macOS, the packaged app on both loaded its own speech model and transcribed a recorded speech sample, and the packaged Windows app passed launch, second-launch and close checks. Not tested before release: a real microphone, the global shortcut and pasting into other apps on real hardware; on the Mac that includes the permission prompts. v1.0.5 stays available if you need to go back.

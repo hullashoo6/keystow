@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from . import autostart, config, paths, settings, stats, tray_icons
+from . import __version__, autostart, config, paths, settings, stats, tray_icons
 
 ACCENT = "#6C5CE7"
 BG = "#1E1E2E"
@@ -28,12 +28,21 @@ CARD = "#2A2A3C"
 TEXT = "#F5F5F7"
 MUTED = "#9C9CAF"
 
-HOTKEY_PRESETS = [
-    ("Right Ctrl", "ctrl_r"),
-    ("Caps Lock", "caps_lock"),
-    ("Right Shift", "shift_r"),
-    ("Right Alt", "alt_r"),
-]
+if sys.platform == "darwin":
+    # MacBook keyboards have no Right Ctrl; the first entry is the Mac default.
+    HOTKEY_PRESETS = [
+        ("Right Option", "alt_r"),
+        ("Right Command", "cmd_r"),
+        ("Right Shift", "shift_r"),
+        ("Right Control", "ctrl_r"),
+    ]
+else:
+    HOTKEY_PRESETS = [
+        ("Right Ctrl", "ctrl_r"),
+        ("Caps Lock", "caps_lock"),
+        ("Right Shift", "shift_r"),
+        ("Right Alt", "alt_r"),
+    ]
 CUSTOM_KEY = "__custom__"
 
 MODEL_CHOICES = ["tiny", "base", "small", "medium", "large-v3", "turbo"]
@@ -271,6 +280,18 @@ class MainWindow(QMainWindow):
         self._update_hint()
         layout.addWidget(self.hint)
 
+        if sys.platform == "darwin":
+            # macOS gives no global keys, paste or microphone audio to an app
+            # until the user allows it, and shows no error when it is blocked.
+            mac_note = QLabel(
+                "On a Mac, KeyStow needs your permission twice: Microphone, and Accessibility "
+                "(for the shortcut and for pasting). Allow both under System Settings > "
+                "Privacy & Security, then quit and reopen KeyStow."
+            )
+            mac_note.setObjectName("status")
+            mac_note.setWordWrap(True)
+            layout.addWidget(mac_note)
+
         self.transcript = QLabel("Your words will appear here - and type themselves where your cursor is.")
         self.transcript.setObjectName("transcript")
         self.transcript.setWordWrap(True)
@@ -341,6 +362,9 @@ class MainWindow(QMainWindow):
         self.tray = QSystemTrayIcon(self._icon_idle, self)
         self.tray.setToolTip("KeyStow")
         menu = QMenu()
+        version_action = QAction(f"KeyStow {__version__}", self)
+        version_action.setEnabled(False)
+        menu.addAction(version_action)
         open_action = QAction("Open KeyStow", self)
         open_action.triggered.connect(self.show_and_raise)
         menu.addAction(open_action)
@@ -584,7 +608,16 @@ def run_app(controller_factory):
 
     window.quit_requested.connect(request_quit)
     shutdown_timer.timeout.connect(finish_quit_if_idle)
-    window.show()
+    try:
+        autostart.refresh()
+    except OSError:
+        pass  # the sign-in entry stays as it was; the tray toggle still works
+    # Started by the sign-in entry: stay out of the way, minimised. Opened by
+    # the user: show the window.
+    if autostart.STARTUP_ARGUMENT in sys.argv[1:]:
+        window.showMinimized()
+    else:
+        window.show()
     try:
         result = app.exec()
     finally:

@@ -1,3 +1,3 @@
 """KeyStow - private push-to-talk voice typing, fully offline."""
 
-__version__ = "1.0.2"
+__version__ = "1.0.6"

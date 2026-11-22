@@ -1,74 +1,60 @@
 # KeyStow
 
-Speak softly, it's typed.
+Speak instead of typing. Put your cursor in a text field, hold a key, speak, and release: KeyStow turns your speech into text on your own computer and pastes it where the cursor is.
 
-Local voice typing: focus an editable field, hold a key while speaking, then release it to request a paste of the transcript. Speech recognition uses faster-whisper on your own machine.
+- **Website and purchase:** <https://hullashoo6.github.io/keystow/>. The ready-to-install app for Windows and Apple Silicon Mac costs $5 once.
+- **Source:** the code in this repository is available under the [MIT license](LICENSE).
+- **Support:** hullashoo6@gmail.com
 
-KeyStow is an AI-assisted project under active reliability testing. It is not a verified feature-for-feature Wispr Flow replacement. See the [product vision](docs/PRODUCT_VISION.md) and [living acceptance checklist](docs/CHECKLIST.md) for evidence and open checks.
+## Using it
 
-## Price and source
+- **Shortcut.** Hold the key while you speak and release it to paste. The default is Right Ctrl on Windows and Right Option on a Mac. Choose another key in the window or from the tray icon.
+- **Where the text goes.** KeyStow pastes into whichever app is focused when the text is ready, so keep the cursor where you want it. Some secure or elevated fields refuse pasted text.
+- **Closing the window quits KeyStow.** Minimise it to keep dictation available. To leave, close the window or choose Quit KeyStow from the tray icon.
+- **Start at sign-in** is on by default: a ticked option in the Windows installer, and switched on once at first run on a Mac. Started that way, KeyStow opens minimised. Switch it off from the tray icon.
+- **Language.** KeyStow transcribes English.
+- **Models.** The base model ships inside the app and needs no download. Larger models download once, the first time you pick them.
+- **Mac permissions.** macOS asks for Microphone access, and the shortcut and pasting need Accessibility access. Allow both under System Settings > Privacy & Security, then quit and reopen KeyStow.
 
-The owner-set product price is **$5 one-time, lifetime**. Source code remains available under the [MIT license](LICENSE). This repository does not activate a checkout or change that license. No paid transcription API or app account is required by the current core implementation.
+Transcription can be wrong, so read text before you send it. KeyStow puts the text on the clipboard to paste it and then restores the text that was there before; images and files on the clipboard are not preserved.
 
-## Current verification boundary
+## Privacy
 
-Windows is the first validation target. A packaged build, an existing download, and a green CI job do not establish that real microphone capture, global shortcuts or insertion work on every machine. macOS packaging is a separate validation track; do not infer Intel Mac support or a tested release from source availability.
+Audio is captured in memory, transcribed on your computer and discarded. KeyStow does not save recordings, keep a transcript history, upload audio or send usage data. The network is used only when you choose a larger model, which downloads once from Hugging Face.
 
-Use the release notes and checklist for the tested commit and actual artifact state. Real OS/device journeys remain required.
+The `.keystow` folder in your user folder holds your settings, daily word counts and a rotating diagnostic log. The log records errors and file paths, not what you dictated.
 
-## Windows
+## What each release is checked for
 
-### Packaged build
+The release workflow builds both installers and publishes only if all of this passes:
 
-Check the [release](https://github.com/hullashoo6/keystow/releases/latest) for `KeyStowSetup.exe`. Install only an artifact whose source and release you trust. Builds are not code-signed; Windows may warn about an unknown publisher. An unsigned warning is not proof that any download is safe.
+- the component tests, on Windows and on an Apple Silicon Mac;
+- the packaged app itself loading the speech model it ships with and transcribing a recorded speech sample, on both;
+- the packaged Windows app opening its window, refusing a second copy and closing cleanly;
+- the Mac app's signature, checked again inside the finished disk image;
+- the uploaded files matching the built files byte for byte.
 
-The installer build is intended to bundle the **base** speech model so core dictation can run without a first-run model download. This must be verified against the actual downloaded release. Other models require an internet download before local use.
+These checks do not use a real microphone, the global shortcut or another app to paste into. Those are tested by hand on real computers. The installers are not code-signed, so Windows and macOS show a warning the first time.
 
-### Run from source
+## Run from source
 
-1. Install Python 3.10 or later from [python.org](https://www.python.org/downloads/).
-2. Download or clone this repository.
-3. Run `install_windows.bat`, then `run_windows.bat`, or create a virtual environment, install `requirements.txt`, and run `python -m keystow`.
+1. Install Python 3.10 or later.
+2. Clone this repository.
+3. On Windows run `install_windows.bat`, then `run_windows.bat`. Elsewhere, create a virtual environment, `pip install -r requirements.txt`, and run `python -m keystow`.
 
-Source installs do not include the bundled speech model. First model load normally downloads it; later use depends on the local model cache. Download size and speed depend on the chosen model and connection.
+A source run downloads the speech model the first time, cannot register itself to start at sign-in, and has noise suppression only where the RNNoise library is present.
 
-## macOS
-
-The workflow targets an Apple Silicon app named `KeyStowMac.dmg`. Confirm that it exists in the release before trying it. Installation, signing/security behavior, microphone and Accessibility permissions, hotkeys, and insertion still require independent real-Mac verification. No Intel Mac installer or compatibility guarantee is offered here.
-
-## Use
-
-- Current source default for uncustomized installs: **hold Right Ctrl** while speaking, then **release** to stop and transcribe.
-- Focus the destination field first. Clipboard insertion acts on the app focused when paste is requested. Changing focus during processing can send text to a different field. Secure/elevated fields and some apps may reject paste.
-- Use the tray menu or window to choose an activation key. Avoid keys that conflict with shortcuts you depend on.
-- Close the window to hide it to the tray; choose **Quit KeyStow** in the tray menu to exit.
-- Model loading and transcription can take time on CPU. Larger models need more storage and memory and are not automatically better for every device or utterance.
-- Existing saved key customizations (including a saved Right Ctrl selection) conservatively retain prior toggle behavior: press once to start, press again to stop. Changing a key now saves the active mode too.
-- `KEYSTOW_TOGGLE=0` explicitly selects hold; `KEYSTOW_TOGGLE=1` selects toggle. Environment mode wins over saved `activation_mode` (`hold` or `toggle`), which wins over the legacy custom-key rule. An explicit `KEYSTOW_HOTKEY` without a mode also retains legacy toggle behavior. Startup does not rewrite preferences.
-- The published **v1.0.2 installers use hold by default for uncustomized installs**. Older **v1.0.0 installers default to toggle**. Both v1.0.2 build jobs passed and both downloads were hash-verified; actual installed microphone, hotkey and paste acceptance remains open. Check the exact version and custom settings before following instructions.
-- Start-at-login is available in the tray menu. Check its actual setting and installed path after upgrades.
-
-Transcription is fallible. Review text before sending or using it. The app does not independently verify that a destination accepted the paste. Clipboard restoration is text-only and can be affected by other apps; do not rely on it to preserve images, files or rich clipboard formats.
-
-## Local data and network behavior
-
-Current application code captures audio in memory, performs speech recognition locally, and uses the OS clipboard for insertion. It does not intentionally save recordings, upload audio or send telemetry. Optional model downloads and source dependency installation use the network; this is distinct from cloud transcription.
-
-The `.keystow` folder in your user directory holds preferences, word counts, and rotating diagnostic logs. On first use, the code attempts to migrate an existing `.murmur` data folder. Logs may contain error details and local paths; review them before sharing. The transcript stays visible in the current window and temporarily passes through the clipboard.
-
-Noise suppression has a native-library fallback. If the library is unavailable or fails, audio passes through without that suppression. A checked box does not prove suppression ran successfully on a particular platform.
-
-## Checks for contributors
-
-With PySide6 installed:
+## Tests
 
 ```sh
 QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
-python -m compileall -q keystow tests
 ```
 
-On Windows PowerShell, set `$env:QT_QPA_PLATFORM = 'offscreen'` before running unittest. These checks exercise startup, controller transitions and Qt behavior with substituted peripheral I/O. They do not certify real microphone capture, model accuracy, OS hotkeys, clipboard behavior or an installed release. Follow the checklist for those journeys.
+On Windows PowerShell, set `$env:QT_QPA_PLATFORM = 'offscreen'` first. The tests substitute the microphone, the speech model, the keyboard and the clipboard, and they use private temporary folders, so they are safe to run next to an installed KeyStow.
 
-## Near-term work
+## Releasing
 
-Prove the default install-to-dictation journey, make failures recoverable, and keep app/page copy consistent with actual behavior. Cloud cleanup, extra modes and new platform claims are deferred until the core is demonstrated.
+1. Set the new version in `installer/setup.iss` and `keystow/__init__.py`, and write `installer/release-notes.md` for it.
+2. Run the **Build and release KeyStow installers** workflow from `main` with that version.
+
+Library versions for release builds are pinned in `installer/constraints.txt`. The website lives in `docs/` and its download buttons always point at the latest release. Working notes from earlier development are in `notes/`.

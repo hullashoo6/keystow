@@ -8,4 +8,4 @@ KeyStow v1.0.5 starts when you sign in by default, and includes the v1.0.4 fixes
 
 Quit KeyStow before installing the update. The Windows x64 and Apple Silicon Mac installers include the base model. The Windows installer is unsigned; the Mac app is ad-hoc signed and not notarized.
 
-Component tests passed on Windows and macOS for this build, and the packaged Windows app passed launch, second-launch and close checks. Physical microphone, global shortcut and paste behaviour were not tested on real hardware before release. v1.0.3 stays available if you need to go back.
+Component tests passed on Windows and macOS for this build, and the packaged Windows and Mac apps passed launch, second-launch and close checks on the build machines. Physical microphone, global shortcut and paste behaviour were not tested on real hardware before release. v1.0.3 stays available if you need to go back.

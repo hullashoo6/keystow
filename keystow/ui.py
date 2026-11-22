@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
+    QMessageBox,
 )
 
 from . import autostart, config, paths, settings, stats, tray_icons
@@ -362,15 +363,8 @@ class MainWindow(QMainWindow):
         label = "Start at login" if sys.platform == "darwin" else "Start with Windows"
         self.autostart_action = QAction(label, self)
         self.autostart_action.setCheckable(True)
-        if not settings.get("autostart_initialized"):
-            # First run: default to starting at login so KeyStow is always there.
-            try:
-                autostart.set_enabled(True)
-                settings.set("autostart_initialized", True)
-            except OSError:
-                # Registration or marker persistence may fail independently.
-                # Keep UI startup usable; an absent marker remains retryable.
-                pass
+        # Start at login is the user's choice, made here or in the installer.
+        # It is never switched on silently at first run.
         self.autostart_action.setChecked(autostart.is_enabled())
         self.autostart_action.triggered.connect(self._toggle_autostart)
         menu.addAction(self.autostart_action)
@@ -466,6 +460,11 @@ class MainWindow(QMainWindow):
             self.storage_warning.show()
 
     def _toggle_autostart(self, checked):
+        if checked and not autostart.available():
+            # Run from source, the login entry would launch bare Python.
+            self.autostart_action.setChecked(False)
+            self.set_state("Start at login works in the installed app, not when run from source.")
+            return
         try:
             autostart.set_enabled(checked)
         except OSError:
@@ -482,9 +481,10 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def closeEvent(self, event):
-        # Closing the window hides it to the tray; use Quit in the tray menu to exit.
-        event.ignore()
-        self.hide()
+        # Closing means quit, not a hidden microphone/listener in the tray.
+        # Keep Qt alive only while in-flight workers finish safely.
+        event.accept()
+        self.quit_requested.emit()
 
     def _model_changed(self, text):
         if self._on_model_change:
@@ -533,8 +533,21 @@ def run_app(controller_factory):
     import sys
 
     app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)  # keep running in the tray
-    window = MainWindow()
+    app.setQuitOnLastWindowClosed(False)  # request_quit owns safe worker cleanup
+    from .single_instance import InstanceGuard
+    guard = InstanceGuard()
+    try:
+        if not guard.acquire():
+            guard.activate_existing()
+            return 0  # never construct a second recorder or global key listener
+        window = MainWindow()
+        guard.listen(window.show_and_raise)
+    except OSError as exc:
+        guard.release()
+        QMessageBox.critical(None, "KeyStow could not start", str(exc))
+        return 1
+    # Keep ownership alive for the complete event loop and worker shutdown.
+    app._keystow_instance_guard = guard
     # Keep the controller (and its worker/listener references) alive for the
     # entire Qt event loop. Construction alone does not start dictation.
     controller = controller_factory(window)
@@ -547,7 +560,13 @@ def run_app(controller_factory):
             shutdown_timer.stop()
             app.quit()
 
+    quitting = False
+
     def request_quit():
+        nonlocal quitting
+        if quitting:
+            return
+        quitting = True
         controller.shutdown()
         window.set_state("Finishing the current task before quitting...", busy=True)
         shutdown_timer.start()
@@ -555,6 +574,10 @@ def run_app(controller_factory):
 
     window.quit_requested.connect(request_quit)
     shutdown_timer.timeout.connect(finish_quit_if_idle)
-    app.aboutToQuit.connect(controller.wait_for_shutdown)
-    window.show()  # first launch shows the window; after that it hides to the tray
-    sys.exit(app.exec())
+    window.show()
+    try:
+        result = app.exec()
+    finally:
+        controller.wait_for_shutdown()
+        guard.release()
+    sys.exit(result)

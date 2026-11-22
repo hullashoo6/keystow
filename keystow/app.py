@@ -1,6 +1,7 @@
 """KeyStow controller: one recording, model load or transcription at a time."""
 
 import logging
+import queue
 import threading
 
 from pynput import keyboard
@@ -32,6 +33,14 @@ class VoiceController:
         # Held for state transitions, not for model inference. Both the Qt
         # thread and global-keyboard listener can request operations.
         self._state_lock = threading.RLock()
+        # Hotkey bookkeeping only. The keyboard-hook thread takes this lock and
+        # never the state lock, so slow microphone, disk or paste work on other
+        # threads cannot stall system-wide key delivery.
+        self._key_lock = threading.Lock()
+        self._actions = None  # queue of hotkey actions once start() is called
+        self._action_thread = None
+        self._limit_token = None
+        self._limit_timer = None
         self._phase = "idle"
         self._closing = False
         self._listener = None
@@ -52,10 +61,80 @@ class VoiceController:
 
     def start(self):
         self._load_model(config.MODEL_SIZE)
+        self._start_dispatcher()
         self._listener = keyboard.Listener(
             on_press=self._on_press, on_release=self._on_release
         )
         self._listener.start()
+
+    def _start_dispatcher(self):
+        """Run hotkey actions on their own thread, not the keyboard-hook thread.
+
+        Windows silently removes a low-level keyboard hook whose thread does
+        not answer in time, so opening or closing the microphone must never
+        happen inside the hook callback.
+        """
+        if self._action_thread is not None:
+            return
+        actions = queue.SimpleQueue()
+        thread = threading.Thread(target=self._run_actions, args=(actions,),
+                                  daemon=True, name="keystow-hotkey")
+        self._actions = actions
+        self._action_thread = thread
+        thread.start()
+
+    def _run_actions(self, actions):
+        while True:
+            action = actions.get()
+            if action is None:
+                return
+            try:
+                action()
+            except Exception:
+                logging.exception("hotkey action failed")
+
+    def _submit(self, action):
+        """Queue a hotkey action, or run it inline before start() (tests)."""
+        actions = self._actions
+        if actions is None:
+            action()
+        else:
+            actions.put(action)
+
+    def _arm_limit(self):
+        """Stop a forgotten recording instead of growing memory without bound."""
+        self._cancel_limit()
+        limit = config.MAX_RECORD_SECONDS
+        if limit <= 0:
+            return
+        token = object()
+        timer = threading.Timer(limit, self._limit_reached, args=(token,))
+        timer.daemon = True
+        self._limit_token = token
+        self._limit_timer = timer
+        timer.start()
+
+    def _cancel_limit(self):
+        timer, self._limit_timer = self._limit_timer, None
+        self._limit_token = None
+        if timer is not None:
+            timer.cancel()
+
+    def _limit_reached(self, token):
+        with self._state_lock:
+            # A timer from an earlier recording must not stop the current one.
+            if self._limit_token is not token or self._phase != "recording":
+                return
+            logging.info("recording reached the %s second limit", config.MAX_RECORD_SECONDS)
+            self.stop_recording()
+
+    @staticmethod
+    def _too_short(audio) -> bool:
+        """True for a tap too brief to hold speech, such as a stray key press."""
+        size = getattr(audio, "size", None)
+        if not isinstance(size, int):
+            return False
+        return size < int(config.MIN_RECORD_SECONDS * config.SAMPLE_RATE)
 
     def set_hotkey(self, name: str):
         with self._state_lock:
@@ -136,6 +215,7 @@ class VoiceController:
             try:
                 self.recorder.start()
                 self._phase = "recording"
+                self._arm_limit()
                 if self._toggle:
                     self.window.set_state(f"Listening... press [{self._label}] again to type.", recording=True)
                 else:
@@ -151,8 +231,17 @@ class VoiceController:
             # Reserve processing before releasing the state lock. No new
             # recording/model swap can slip between stop and worker launch.
             self._phase = "processing"
+            self._cancel_limit()
             try:
                 audio = self.recorder.stop()
+                if self._too_short(audio):
+                    # A stray tap of the key, not speech: never run the model
+                    # or paste anything for it.
+                    self._phase = "idle"
+                    hint = "Press" if self._toggle else "Hold"
+                    self.window.set_state(
+                        f"Too short - nothing typed. {hint} [{self._label}] and speak.", busy=False)
+                    return
                 model = self.transcriber
                 self.window.set_state("Transcribing...", busy=True)
                 worker = threading.Thread(target=self._transcribe_and_type,
@@ -178,10 +267,15 @@ class VoiceController:
         return getattr(key, "char", None) or str(key)
 
     def _on_press(self, key):
+        # Called on the keyboard-hook thread for every key on the system,
+        # including the Ctrl+V this app injects to paste. Decide without the
+        # state lock whether the key is ours, and never do slow work here.
+        if self._closing:
+            return
+        if not self._capturing and key != self._hotkey:
+            return
         try:
-            with self._state_lock:
-                if self._closing:
-                    return
+            with self._key_lock:
                 if self._capturing:
                     self._capturing = False
                     self.set_hotkey(self._key_name(key))
@@ -193,24 +287,19 @@ class VoiceController:
                 if self._hotkey_down:
                     return  # OS auto-repeat is not a new physical press
                 self._hotkey_down = True
-                if self._toggle:
-                    self.toggle_recording()
-                else:
-                    self.start_recording()
+            self._submit(self.toggle_recording if self._toggle else self.start_recording)
         except Exception:
             logging.exception("hotkey press handler failed")
 
     def _on_release(self, key):
+        if self._closing or key != self._hotkey:
+            return
         try:
-            with self._state_lock:
-                if self._closing:
-                    return
-                if key != self._hotkey:
-                    return
+            with self._key_lock:
                 was_down = self._hotkey_down
                 self._hotkey_down = False
-                if was_down and not self._toggle:
-                    self.stop_recording()
+            if was_down and not self._toggle:
+                self._submit(self.stop_recording)
         except Exception:
             logging.exception("hotkey release handler failed")
 
@@ -228,6 +317,7 @@ class VoiceController:
             self._phase = "closing"
             self._capturing = False
             self._hotkey_down = False
+            self._cancel_limit()
             if was_recording:
                 try:
                     self.recorder.stop()  # discard audio on explicit quit
@@ -235,6 +325,8 @@ class VoiceController:
                     logging.exception("microphone cleanup during quit failed")
             if self._listener is not None:
                 self._listener.stop()
+            if self._actions is not None:
+                self._actions.put(None)  # let the hotkey action thread finish
 
     def can_exit(self):
         loader = getattr(self, "_loader", None)
@@ -250,33 +342,46 @@ class VoiceController:
         worker = getattr(self, "_worker", None)
         if worker is not None and worker is not threading.current_thread():
             worker.join()
+        actions = self._action_thread
+        if actions is not None and actions is not threading.current_thread():
+            actions.join(timeout=2)
+
+    def _is_closing(self) -> bool:
+        with self._state_lock:
+            return self._closing
 
     def _transcribe_and_type(self, audio, model):
         # Stay processing through paste. Quit wins over any result that has
         # not yet started insertion. Already-dispatched OS paste cannot undo.
+        #
+        # The phase stays "processing" until the end, which is what keeps a new
+        # capture or model switch out. The state lock itself is NOT held across
+        # disk, clipboard or key I/O: the injected paste keys pass through this
+        # app's own keyboard hook, and no hotkey or UI thread may wait on them.
         result = "Didn't catch that - try again."
         try:
             text = model.transcribe(audio) if model else ""
-            with self._state_lock:
-                if self._closing:
+            if self._is_closing():
+                return
+            if text:
+                self.window.show_transcript(text)
+                # Statistics are secondary; a disk error must not lose
+                # otherwise usable dictation.
+                try:
+                    stats.add_words(len(text.split()))
+                    self.window.refresh_stats()
+                except Exception:
+                    logging.exception("word statistics could not be saved")
+                if self._is_closing():
                     return
-                if text:
-                    self.window.show_transcript(text)
-                    # Statistics are secondary; a disk error must not lose
-                    # otherwise usable dictation.
-                    try:
-                        stats.add_words(len(text.split()))
-                        self.window.refresh_stats()
-                    except Exception:
-                        logging.exception("word statistics could not be saved")
-                    try:
-                        type_text(text)
-                    except Exception:
-                        logging.exception("typing failed")
-                        result = "Paste or clipboard cleanup failed. Text may already be inserted; check the destination before retrying. Your transcript is shown below."
-                    else:
-                        verb = "Press" if self._toggle else "Hold"
-                        result = f"Paste requested. {verb} [{self._label}] to speak again."
+                try:
+                    type_text(text)
+                except Exception:
+                    logging.exception("typing failed")
+                    result = "Paste or clipboard cleanup failed. Text may already be inserted; check the destination before retrying. Your transcript is shown below."
+                else:
+                    verb = "Press" if self._toggle else "Hold"
+                    result = f"Paste requested. {verb} [{self._label}] to speak again."
         except Exception as exc:
             logging.exception("transcription failed")
             result = f"Transcription failed: {exc}. Try again."

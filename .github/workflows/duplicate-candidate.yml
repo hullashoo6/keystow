@@ -1,0 +1,117 @@
+name: Duplicate-dictation candidate - NO RELEASE
+
+on:
+  push:
+    branches: [candidate/duplicate-dictation-20261120]
+    paths: ['keystow/**', 'tests/**', '.github/workflows/duplicate-candidate.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify architecture
+        run: python -c "import platform; print(platform.machine())"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pillow psutil
+      - name: Component regressions (controlled I/O, not real microphone acceptance)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -v
+      - name: Generate app icons
+        run: python installer/make_icons.py
+      - name: Fetch RNNoise native library
+        run: |
+          pip download pyrnnoise==0.4.5 --no-deps --platform win_amd64 --python-version 3.11 --only-binary :all: -d vendor_dl
+          python -c "import zipfile,glob; z=zipfile.ZipFile(glob.glob('vendor_dl/*.whl')[0]); z.extract('pyrnnoise-0.4.5.data/purelib/pyrnnoise/rnnoise.dll','vendor_dl')"
+          copy vendor_dl\pyrnnoise-0.4.5.data\purelib\pyrnnoise\rnnoise.dll keystow\vendor\rnnoise.dll
+      - name: Download bundled Whisper base model
+        run: |
+          pip install huggingface-hub
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base', local_dir='models/faster-whisper-base')"
+      - name: Build KeyStow.exe with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer\keystow.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      - name: Frozen Windows duplicate-launch and window-close process acceptance
+        run: python installer/verify_candidate_processes.py dist/KeyStow.exe candidate-evidence
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        run: iscc installer\setup.iss
+      - name: Verify Windows installer and save checksum
+        run: |
+          python -c "import hashlib,json,pathlib,platform; p=pathlib.Path('installer/installer/KeyStowSetup.exe'); print(json.dumps({'file':p.name,'size':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'architecture':platform.machine()}))" > installer/installer/windows-checksum.json
+      - name: Stage Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOT-FOR-RELEASE-windows-duplicate-fix
+          retention-days: 7
+          path: |
+            installer/installer/KeyStowSetup.exe
+            installer/installer/windows-checksum.json
+            candidate-evidence/**
+          if-no-files-found: error
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify architecture
+        run: python -c "import platform; print(platform.machine())"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pillow psutil
+      - name: Component regressions (controlled I/O, not real microphone acceptance)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -v
+      - name: Generate app icons
+        run: python installer/make_icons.py
+      - name: Download bundled Whisper base model
+        run: |
+          pip install huggingface-hub
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base', local_dir='models/faster-whisper-base')"
+      - name: Require Apple Silicon build
+        run: python -c "import platform; assert platform.machine() == 'arm64', platform.machine()"
+      - name: Build KeyStow.app with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name KeyStow --icon installer/keystow.icns --add-data "models/faster-whisper-base:models/faster-whisper-base" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      - name: Frozen Mac duplicate-launch and Quit process acceptance
+        continue-on-error: true
+        run: python installer/verify_candidate_processes.py dist/KeyStow.app/Contents/MacOS/KeyStow candidate-evidence
+      - name: Set macOS bundle version
+        run: |
+          python -c "import plistlib; p='dist/KeyStow.app/Contents/Info.plist'; d=plistlib.load(open(p,'rb')); d.update(CFBundleShortVersionString='1.0.3', CFBundleVersion='1.0.3'); plistlib.dump(d,open(p,'wb'))"
+      - name: Create DMG
+        run: |
+          mkdir -p dist/dmg
+          cp -R dist/KeyStow.app dist/dmg/
+          hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
+      - name: Verify Mac installer and save checksum
+        run: |
+          hdiutil verify dist/KeyStowMac.dmg
+          file dist/KeyStow.app/Contents/MacOS/KeyStow
+          python -c "import hashlib,json,pathlib,platform; p=pathlib.Path('dist/KeyStowMac.dmg'); print(json.dumps({'file':p.name,'size':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'architecture':platform.machine()}))" > dist/mac-checksum.json
+      - name: Stage Mac installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOT-FOR-RELEASE-mac-duplicate-fix
+          retention-days: 7
+          path: |
+            dist/KeyStowMac.dmg
+            dist/mac-checksum.json
+            candidate-evidence/**
+          if-no-files-found: error

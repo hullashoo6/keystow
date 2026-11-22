@@ -8,6 +8,16 @@ import sys
 
 _APP_NAME = "KeyStow"
 
+
+def available() -> bool:
+    """Only the installed app may register itself to start at login.
+
+    From a source checkout sys.executable is the Python interpreter, so a login
+    entry would open a bare interpreter at every sign-in instead of KeyStow.
+    """
+    return bool(getattr(sys, "frozen", False)) and sys.platform in ("darwin", "win32")
+
+
 if sys.platform == "darwin":
     _PLIST = os.path.expanduser("~/Library/LaunchAgents/com.keystow.app.plist")
     def is_enabled() -> bool:

@@ -1,4 +1,4 @@
-"""Real UI first-run retry state, not OS login acceptance."""
+"""Start at login is opt-in. Real UI wiring, not OS login acceptance."""
 import os
 import subprocess
 import sys
@@ -6,61 +6,77 @@ import textwrap
 import unittest
 
 
-class AutostartInitTest(unittest.TestCase):
-    def test_settings_write_failure_after_registration_does_not_block_ui(self):
-        script = textwrap.dedent('''
-            from unittest.mock import patch
-            from PySide6.QtWidgets import QApplication
-            from keystow import ui
-            app = QApplication([])
-            with patch.object(ui.autostart, 'set_enabled') as register, \
-                 patch.object(ui.autostart, 'is_enabled', return_value=True), \
-                 patch.object(ui.settings, 'get', side_effect=lambda k,d=None:d), \
-                 patch.object(ui.settings, 'set', side_effect=OSError('synthetic settings disk failure')):
-                window = ui.MainWindow()
-                assert window.autostart_action.isChecked()
-                assert window.record_btn is not None
-                second = ui.MainWindow()
-                assert second.autostart_action.isChecked()
-                assert register.call_count == 2  # fixed per-user entry is idempotent
-        ''')
-        result = subprocess.run([sys.executable, '-c', script],
+class AutostartOptInTest(unittest.TestCase):
+    def run_script(self, script):
+        result = subprocess.run([sys.executable, '-c', textwrap.dedent(script)],
                                 env=dict(os.environ, QT_QPA_PLATFORM='offscreen'),
                                 text=True, capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_failed_first_registration_retries_without_resetting_explicit_optout(self):
-        script = textwrap.dedent('''
-            from unittest.mock import patch, Mock
+    def test_first_run_never_registers_a_login_entry(self):
+        self.run_script('''
+            from unittest.mock import patch
             from PySide6.QtWidgets import QApplication
             from keystow import ui
             app = QApplication([])
-            saved = {}
-            enabled = [False]
-            def register(on):
-                if register.calls == 0:
-                    register.calls += 1
-                    raise OSError('synthetic permission failure')
-                register.calls += 1
-                enabled[0] = on
-            register.calls = 0
-            with patch.object(ui.autostart, 'set_enabled', side_effect=register), \\
-                 patch.object(ui.autostart, 'is_enabled', side_effect=lambda:enabled[0]), \\
-                 patch.object(ui.settings, 'get', side_effect=lambda k,d=None:saved.get(k,d)), \\
-                 patch.object(ui.settings, 'set', side_effect=lambda k,v:saved.__setitem__(k,v)):
-                first = ui.MainWindow()
-                assert not saved.get('autostart_initialized'), saved
-                assert not first.autostart_action.isChecked()
-                second = ui.MainWindow()
-                assert register.calls == 2
-                assert saved['autostart_initialized'] is True
-                assert second.autostart_action.isChecked()
-                enabled[0] = False  # later explicit opt-out must remain off
-                third = ui.MainWindow()
-                assert register.calls == 2
-                assert not third.autostart_action.isChecked()
+            with patch.object(ui.autostart, 'set_enabled') as register, \\
+                 patch.object(ui.autostart, 'is_enabled', return_value=False), \\
+                 patch.object(ui.settings, 'get', side_effect=lambda k,d=None:d), \\
+                 patch.object(ui.settings, 'set'):
+                window = ui.MainWindow()
+                assert register.call_count == 0, register.call_args_list
+                assert not window.autostart_action.isChecked()
         ''')
-        result = subprocess.run([sys.executable, '-c', script],
-                                env=dict(os.environ, QT_QPA_PLATFORM='offscreen'),
-                                text=True, capture_output=True, timeout=15)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_source_run_cannot_register_the_python_interpreter(self):
+        self.run_script('''
+            from unittest.mock import patch
+            from PySide6.QtWidgets import QApplication
+            from keystow import ui
+            app = QApplication([])
+            with patch.object(ui.autostart, 'set_enabled') as register, \\
+                 patch.object(ui.autostart, 'is_enabled', return_value=False), \\
+                 patch.object(ui.autostart, 'available', return_value=False), \\
+                 patch.object(ui.settings, 'get', side_effect=lambda k,d=None:d), \\
+                 patch.object(ui.settings, 'set'):
+                window = ui.MainWindow()
+                window.autostart_action.trigger()
+                assert register.call_count == 0, register.call_args_list
+                assert not window.autostart_action.isChecked()
+        ''')
+
+    def test_installed_app_registers_only_when_the_user_asks(self):
+        self.run_script('''
+            from unittest.mock import patch
+            from PySide6.QtWidgets import QApplication
+            from keystow import ui
+            app = QApplication([])
+            with patch.object(ui.autostart, 'set_enabled') as register, \\
+                 patch.object(ui.autostart, 'is_enabled', return_value=False), \\
+                 patch.object(ui.autostart, 'available', return_value=True), \\
+                 patch.object(ui.settings, 'get', side_effect=lambda k,d=None:d), \\
+                 patch.object(ui.settings, 'set'):
+                window = ui.MainWindow()
+                assert register.call_count == 0
+                window.autostart_action.trigger()
+                register.assert_called_once_with(True)
+                assert window.autostart_action.isChecked()
+        ''')
+
+    def test_existing_entry_can_always_be_switched_off(self):
+        self.run_script('''
+            from unittest.mock import patch
+            from PySide6.QtWidgets import QApplication
+            from keystow import ui
+            app = QApplication([])
+            with patch.object(ui.autostart, 'set_enabled') as register, \\
+                 patch.object(ui.autostart, 'is_enabled', return_value=True), \\
+                 patch.object(ui.autostart, 'available', return_value=False), \\
+                 patch.object(ui.settings, 'get', side_effect=lambda k,d=None:d), \\
+                 patch.object(ui.settings, 'set'):
+                window = ui.MainWindow()
+                assert window.autostart_action.isChecked()
+                window.autostart_action.trigger()
+                register.assert_called_once_with(False)
+                assert not window.autostart_action.isChecked()
+        ''')

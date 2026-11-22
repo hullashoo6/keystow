@@ -22,6 +22,8 @@ class TyperTest(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('typer_under_test',Path(__file__).parents[1]/'keystow/typer.py')
         self.m=importlib.util.module_from_spec(spec)
         with patch.dict(sys.modules,deps):spec.loader.exec_module(self.m)
+        # These assertions model Windows; the Mac modifier has its own test.
+        self.m.sys=types.SimpleNamespace(platform='win32',exc_info=sys.exc_info)
         p=patch.object(self.m.time,'sleep');self.sleep=p.start();self.addCleanup(p.stop)
 
     def copy(self,text):self.clipboard=text

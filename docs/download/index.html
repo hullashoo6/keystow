@@ -28,7 +28,7 @@
 <div class="notes">
 <div class="note"><h3 class="note-title">Updating?</h3><p class="note-body">Quit KeyStow first, then run the new installer.</p></div>
 <div class="note"><h3 class="note-title">On Windows</h3><p class="note-body">The installer may show a "Windows protected your PC" prompt. If it does: choose More info, then Run anyway.</p></div>
-<div class="note"><h3 class="note-title">On Mac</h3><p class="note-body">Drag KeyStow into Applications and open it from there. The first launch may show a one-time "unidentified developer" prompt. If it does: right-click the KeyStow app and choose Open, or go to System Settings &gt; Privacy &amp; Security &gt; Open Anyway. Then allow Microphone and Accessibility access under Privacy &amp; Security, and quit and reopen KeyStow.</p></div>
+<div class="note"><h3 class="note-title">On Mac</h3><p class="note-body">Drag KeyStow into Applications and open it from there. The first launch may show a one-time "unidentified developer" prompt. If it does: go to System Settings &gt; Privacy &amp; Security &gt; Open Anyway. Then allow Microphone and Accessibility access under Privacy &amp; Security, and quit and reopen KeyStow.</p></div>
 </div>
 </div>
 <p class="help-line">Need help? Email <a href="mailto:hullashoo6@gmail.com">hullashoo6@gmail.com</a>.</p>
@@ -36,13 +36,25 @@
 </main>
 </div>
 <script>
+/* The downloads show only on arrival from a completed Dodo payment. Dodo sends
+   the buyer here with ?payment_id=...&status=succeeded. This browser then
+   remembers the purchase, so the buyer can come back to this page later.
+   Opened any other way, the page shows the existing "payment not completed"
+   message, which points to the Dodo purchase email and customer portal. */
 try{
 var p=new URLSearchParams(location.search);
 var s=p.get('status');
-if(s==='succeeded'){
-  document.getElementById('state-eyebrow').textContent='Payment confirmed';
-  document.getElementById('state-title').textContent='Thank you. Your download is ready.';
-}else if(s){
+var paid=s==='succeeded'||(!s&&!!p.get('payment_id'));
+try{
+  if(paid)localStorage.setItem('keystow-purchased','1');
+  else if(!s&&localStorage.getItem('keystow-purchased')==='1')paid=true;
+}catch(e){}
+if(paid){
+  if(s==='succeeded'){
+    document.getElementById('state-eyebrow').textContent='Payment confirmed';
+    document.getElementById('state-title').textContent='Thank you. Your download is ready.';
+  }
+}else{
   document.getElementById('downloads').style.display='none';
   document.getElementById('warn').style.display='block';
   document.getElementById('state-title').textContent='Payment not completed';

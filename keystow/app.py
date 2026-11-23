@@ -8,7 +8,7 @@ import threading
 
 from pynput import keyboard
 
-from . import __version__, cleanup, config, crashlog, settings, stats
+from . import __version__, cleanup, config, crashlog, mac_input, settings, stats
 from .recorder import PushToTalkRecorder
 from .transcriber import Transcriber
 from .typer import type_text
@@ -65,11 +65,26 @@ class VoiceController:
     def start(self):
         self._load_model(config.MODEL_SIZE)
         self._start_dispatcher()
+        blocked = False
+        if sys.platform == "darwin":
+            # This runs on the main thread, the only one a Mac lets read the
+            # keyboard layout: do it now, before the listener thread exists.
+            mac_input.prepare()
+            if getattr(sys, "frozen", False):
+                # macOS shows its own dialog, with a button to the setting.
+                blocked = mac_input.accessibility_trusted(prompt=True) is False
         self._listener = keyboard.Listener(
             on_press=self._on_press, on_release=self._on_release
         )
-        self._listener.start()
-        self._watch_hotkey_access()
+        if blocked:
+            # Without Accessibility access macOS gives this app no keys, so a
+            # listener could do nothing, and starting one makes macOS ask for
+            # a second, different permission (Input Monitoring) as well.
+            with self._state_lock:
+                self._hotkey_blocked = True
+        else:
+            self._listener.start()
+            self._watch_hotkey_access()
         self._remove_leftovers()
 
     def _watch_hotkey_access(self):
@@ -456,9 +471,16 @@ class VoiceController:
                     return
                 try:
                     type_text(text)
-                except Exception:
-                    logging.exception("typing failed")
-                    result = "Paste or clipboard cleanup failed. Text may already be inserted; check the destination before retrying. Your transcript is shown below."
+                except Exception as exc:
+                    if getattr(exc, "left_on_clipboard", False):
+                        # A Mac without Accessibility access: no keys were sent.
+                        logging.warning("paste blocked by macOS; text left on the clipboard")
+                        result = ("Your Mac did not let KeyStow paste. The text is on the clipboard: "
+                                  "press Command-V. To fix this, allow KeyStow under System Settings > "
+                                  "Privacy & Security > Accessibility, then quit and reopen KeyStow.")
+                    else:
+                        logging.exception("typing failed")
+                        result = "Paste or clipboard cleanup failed. Text may already be inserted; check the destination before retrying. Your transcript is shown below."
                 else:
                     verb = "Press" if self._toggle else "Hold"
                     result = f"Paste requested. {verb} [{self._label}] to speak again."

@@ -471,6 +471,64 @@ class LifecycleTest(unittest.TestCase):
         self.finish()
         self.paste.assert_called_once_with('second session')
 
+    def start_as(self, platform, frozen, trusted, order=None):
+        """Run start() as the given system would, with stand-ins for the OS."""
+        listener = Mock()
+        mac = Mock()
+        mac.accessibility_trusted.return_value = trusted
+        if order is not None:
+            listener.start.side_effect = lambda: order.append('listener')
+            mac.prepare.side_effect = lambda: order.append('layout')
+        self.module.keyboard.Listener = Mock(return_value=listener)
+        self.c._watch_hotkey_access = Mock()
+        with patch.object(self.module, 'sys', types.SimpleNamespace(platform=platform, frozen=frozen)), \
+             patch.object(self.module, 'mac_input', mac):
+            self.c.start()
+        self.addCleanup(self.c.shutdown)
+        return listener, mac
+
+    def test_mac_start_reads_the_layout_before_the_listener_and_asks_for_access(self):
+        order = []
+        listener, mac = self.start_as('darwin', True, True, order)
+        self.assertEqual(order, ['layout', 'listener'])
+        mac.accessibility_trusted.assert_called_once_with(prompt=True)
+        self.c._watch_hotkey_access.assert_called_once()
+        self.assertFalse(self.c._hotkey_blocked)
+
+    def test_mac_without_accessibility_starts_no_listener_and_says_why(self):
+        listener, mac = self.start_as('darwin', True, False)
+        mac.prepare.assert_called_once()
+        listener.start.assert_not_called()
+        self.c._watch_hotkey_access.assert_not_called()
+        self.assertTrue(self.c._hotkey_blocked)
+        self.assertIn('Accessibility', self.c._ready_message())
+        self.c.shutdown()  # an unstarted listener must not break quitting
+
+    def test_mac_source_run_prepares_the_layout_without_a_system_prompt(self):
+        listener, mac = self.start_as('darwin', False, False)
+        mac.prepare.assert_called_once()
+        mac.accessibility_trusted.assert_not_called()
+        listener.start.assert_called_once()
+
+    def test_windows_start_never_touches_the_mac_helpers(self):
+        listener, mac = self.start_as('win32', False, None)
+        mac.prepare.assert_not_called()
+        mac.accessibility_trusted.assert_not_called()
+        listener.start.assert_called_once()
+        self.assertFalse(self.c._hotkey_blocked)
+
+    def test_blocked_mac_paste_says_the_text_is_on_the_clipboard(self):
+        class Blocked(RuntimeError):
+            left_on_clipboard = True
+        self.paste.side_effect = Blocked('macOS is not letting KeyStow paste')
+        self.c.start_recording()
+        self.c.stop_recording()
+        self.finish()
+        message = self.window.set_state.call_args.args[0]
+        self.assertIn('clipboard', message)
+        self.assertIn('Accessibility', message)
+        self.assertNotIn('may already be inserted', message)
+
     def test_blocked_mac_shortcut_replaces_the_ready_message(self):
         self.assertIn('anywhere to speak', self.c._ready_message())
         self.c._hotkey_blocked = True

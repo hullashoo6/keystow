@@ -1,0 +1,47 @@
+name: Promote a tested pre-release
+
+# Run this after a pre-release has been installed and tried on real computers.
+# It makes that release the one the website's download buttons serve. No file
+# changes: the installers that were tested are the installers that ship.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to promote, for example 1.0.7
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keystow-release
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Make the pre-release the latest release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the pre-release and promote it
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 1.0.7"; exit 1; }
+          tag="v$VERSION"
+          gh api "repos/$GH_REPO/releases/tags/$tag" > release.json
+          python3 - <<'PY'
+          import json
+          release = json.load(open('release.json'))
+          assert release['draft'] is False, 'this release is still a draft'
+          assert release['prerelease'] is True, 'this release is not a pre-release, so there is nothing to promote'
+          names = {asset['name'] for asset in release['assets'] if asset.get('state') == 'uploaded'}
+          assert names == {'KeyStowSetup.exe', 'KeyStowMac.dmg'}, sorted(names)
+          PY
+          gh release edit "$tag" --prerelease=false --latest
+          test "$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)" = "$tag"
+          echo "The website's download buttons now serve $tag" | tee -a "$GITHUB_STEP_SUMMARY"

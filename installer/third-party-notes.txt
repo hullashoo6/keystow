@@ -1,0 +1,73 @@
+KeyStow third-party notices
+===========================
+
+KeyStow's own code is under the MIT licence: see LICENSE.txt in this folder.
+Source: https://github.com/hullashoo6/keystow
+
+The installers also contain the third-party software listed in this file. Each
+part stays under its own licence. Where a package carries its licence text, it
+is in the packages folder. The full texts of the common licences are in the
+texts folder.
+
+Parts that need a note
+----------------------
+
+Qt 6 and PySide6 (Qt for Python)
+    Licence: GNU Lesser General Public License v3
+             (texts/LGPL-3.0.txt, which adds to texts/GPL-3.0.txt).
+    The unmodified libraries from the PySide6 packages on PyPI, kept as
+    separate files inside the app so that they can be replaced.
+    Source:  https://download.qt.io/official_releases/QtForPython/pyside6/
+             https://download.qt.io/official_releases/qt/
+
+pynput
+    Licence: GNU Lesser General Public License v3 (texts/LGPL-3.0.txt).
+    Unmodified, from PyPI.
+    Source:  https://github.com/moses-palmer/pynput
+
+FFmpeg libraries, with x264 and x265
+    These arrive inside the PyAV ("av") package, which the speech library
+    depends on. KeyStow does not use the video encoders.
+    Licence: FFmpeg is under the GNU Lesser General Public License v2.1 or
+             later; a build that includes x264 and x265 is under the GNU
+             General Public License (texts/LGPL-2.1.txt, texts/GPL-2.0.txt,
+             texts/GPL-3.0.txt). The same package carries other codec
+             libraries, each under its own licence.
+    Source:  https://github.com/PyAV-Org/pyav-ffmpeg (sources and build
+             scripts for these binaries)
+             https://ffmpeg.org/
+             https://code.videolan.org/videolan/x264
+             https://bitbucket.org/multicoreware/x265_git
+
+Whisper "base" speech model
+    Licence: MIT. Model by OpenAI, converted for CTranslate2 by SYSTRAN.
+    Source:  https://huggingface.co/Systran/faster-whisper-base
+             https://github.com/openai/whisper
+
+Silero VAD model (inside faster-whisper)
+    Licence: MIT.
+    Source:  https://github.com/snakers4/silero-vad
+
+RNNoise (Windows installer only)
+    Licence: BSD 3-Clause. The library file and its Python wrapper come from
+             pyrnnoise, under the Apache License 2.0
+             (packages/pyrnnoise/LICENSE.txt, texts/Apache-2.0.txt).
+    Source:  https://gitlab.xiph.org/xiph/rnnoise
+             https://github.com/pengzhendong/pyrnnoise
+
+PortAudio (inside sounddevice)
+    Licence: MIT.
+    Source:  https://www.portaudio.com/
+
+Mesa software renderer (opengl32sw.dll, Windows installer only, with Qt)
+    Licence: MIT.
+    Source:  https://www.mesa3d.org/
+
+Python runtime
+    Licence: Python Software Foundation License
+             (texts/Python-LICENSE.txt when the build could find it).
+    Source:  https://www.python.org/
+
+OpenSSL (with the Python runtime)
+    Licence: Apache License 2.0 (texts/Apache-2.0.txt).
+    Source:  https://www.openssl.org/

@@ -36,6 +36,10 @@ def setup() -> str | None:
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.addHandler(handler)
+    # The speech library logs a line with the audio length for every
+    # dictation. That is a record of when and how long the user spoke, which
+    # the log must not keep; its warnings and errors still get through.
+    logging.getLogger("faster_whisper").setLevel(logging.WARNING)
     _handler = handler
 
     fault_file = None

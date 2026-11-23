@@ -49,6 +49,17 @@ class CrashLogTest(unittest.TestCase):
         crashlog.faulthandler.enable.assert_called_once()
         self.assertEqual(logging.getLogger().handlers.count(handler),1)
 
+    def test_per_dictation_lines_from_the_speech_library_stay_out_of_the_log(self):
+        speech=logging.getLogger('faster_whisper');before=speech.level
+        self.addCleanup(speech.setLevel,before)
+        result=crashlog.setup()
+        speech.info('Processing audio with duration 00:02.834')
+        speech.warning('synthetic speech-library warning')
+        crashlog._handler.flush()
+        written=Path(result).read_text()
+        self.assertNotIn('Processing audio',written)
+        self.assertIn('synthetic speech-library warning',written)
+
     def test_native_fault_trace_failure_preserves_ordinary_logging(self):
         crashlog.faulthandler.enable.side_effect=RuntimeError('not available')
         result=crashlog.setup()

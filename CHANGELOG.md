@@ -2,7 +2,7 @@
 
 Every version of KeyStow, newest first. This file is where release notes are written: the release workflow publishes the section for the version being released as that release's notes on GitHub.
 
-The Mac installers of v1.0.0 to v1.0.5 have been withdrawn, because they could not get microphone access. Their Windows installers remain on the releases page.
+Do not use the Mac installers of v1.0.0 to v1.0.5: they could not get microphone access.
 
 ## v1.0.7
 

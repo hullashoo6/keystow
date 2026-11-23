@@ -26,7 +26,7 @@ def load():
 class FakePynput:
     """Stands in for pynput's Mac modules and records which thread reads the layout."""
 
-    def __init__(self, broken=False):
+    def __init__(self, broken=False, layout=b'layout-bytes'):
         self.reads = []
         self.controllers = []
         outer = self
@@ -36,13 +36,19 @@ class FakePynput:
             outer.reads.append(threading.current_thread().name)
             if broken:
                 raise OSError('no keyboard layout')
-            yield ('keyboard-type', b'layout-bytes')
+            yield ('keyboard-type', layout)
+
+        def get_unicode_to_keycode_map():
+            raise AssertionError('the letter table was built from a missing layout')
 
         self.original = keycode_context
         util = types.ModuleType('pynput._util.darwin')
         util.keycode_context = keycode_context
+        util.get_unicode_to_keycode_map = get_unicode_to_keycode_map
         keyboard_darwin = types.ModuleType('pynput.keyboard._darwin')
         keyboard_darwin.keycode_context = keycode_context
+        keyboard_darwin.get_unicode_to_keycode_map = get_unicode_to_keycode_map
+        self.table = get_unicode_to_keycode_map
 
         class Controller:
             def __init__(self):
@@ -110,6 +116,21 @@ class PrepareTest(unittest.TestCase):
         self.assertIs(fake.keyboard_darwin.keycode_context, fake.original)
         self.assertIsNone(module.controller())
 
+    def test_a_usable_layout_leaves_the_letter_table_to_pynput(self):
+        fake, module = FakePynput(), load()
+        with patch.dict(sys.modules, fake.modules), patch.object(sys, 'platform', 'darwin'):
+            self.assertTrue(module.prepare())
+        self.assertIs(fake.util.get_unicode_to_keycode_map, fake.table)
+        self.assertIs(fake.keyboard_darwin.get_unicode_to_keycode_map, fake.table)
+
+    def test_a_missing_layout_gives_pynput_an_empty_letter_table(self):
+        fake, module = FakePynput(layout=None), load()
+        with patch.dict(sys.modules, fake.modules), patch.object(sys, 'platform', 'darwin'):
+            self.assertTrue(module.prepare())
+        self.assertEqual(fake.util.get_unicode_to_keycode_map(), {})
+        self.assertEqual(fake.keyboard_darwin.get_unicode_to_keycode_map(), {})
+        self.assertIsNotNone(module.controller())
+
     def test_paste_key_is_the_physical_v_key(self):
         fake, module = FakePynput(), load()
         with patch.dict(sys.modules, fake.modules):
@@ -149,10 +170,12 @@ class RealPynputTest(unittest.TestCase):
         from pynput._util import darwin as util_darwin
         from pynput.keyboard import _darwin as keyboard_darwin
 
-        originals = (util_darwin.keycode_context, keyboard_darwin.keycode_context)
+        originals = (util_darwin.keycode_context, keyboard_darwin.keycode_context,
+                     util_darwin.get_unicode_to_keycode_map, keyboard_darwin.get_unicode_to_keycode_map)
 
         def restore():
-            util_darwin.keycode_context, keyboard_darwin.keycode_context = originals
+            (util_darwin.keycode_context, keyboard_darwin.keycode_context,
+             util_darwin.get_unicode_to_keycode_map, keyboard_darwin.get_unicode_to_keycode_map) = originals
 
         self.addCleanup(restore)
         readers = []

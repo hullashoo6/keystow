@@ -52,6 +52,13 @@ def prepare() -> bool:
             # Both modules hold their own reference to the function.
             util_darwin.keycode_context = cached_keycode_context
             keyboard_darwin.keycode_context = cached_keycode_context
+            if snapshot[1] is None:
+                # Some input methods have no Unicode layout data. pynput
+                # would pass that missing layout to the system to build its
+                # letter-to-key table. KeyStow pastes by key code and needs
+                # no such table, so give pynput an empty one.
+                util_darwin.get_unicode_to_keycode_map = dict
+                keyboard_darwin.get_unicode_to_keycode_map = dict
             _installed = True
         except Exception:
             logging.exception("keyboard layout could not be read on the main thread")

@@ -145,9 +145,7 @@ jobs:
   build-mac:
     name: Mac installer (Apple Silicon)
     needs: check
-    # macOS 15 on Apple Silicon, not the newest macOS: an app built on an older
-    # system loads on more Macs. The app itself needs macOS 14 or later.
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.check.outputs.version }}

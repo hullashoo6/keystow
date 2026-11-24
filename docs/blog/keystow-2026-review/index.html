@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KeyStow Year in Review: What Shipped in 2026</title>
+<meta name="description" content="Every KeyStow release of 2026, from the first v1.0.0 to v1.0.6, taken straight from the changelog: what shipped, what was fixed, what we learned.">
+<link rel="canonical" href="https://hullashoo6.github.io/keystow/blog/keystow-2026-review/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="KeyStow">
+<meta property="og:title" content="KeyStow Year in Review: What Shipped in 2026">
+<meta property="og:description" content="Every KeyStow release of 2026, from the first v1.0.0 to v1.0.6, taken straight from the changelog: what shipped, what was fixed, what we learned.">
+<meta property="og:url" content="https://hullashoo6.github.io/keystow/blog/keystow-2026-review/">
+<meta property="og:image" content="https://hullashoo6.github.io/keystow/assets/og.png">
+<meta property="article:published_time" content="2026-11-24">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" type="image/png" href="../../assets/favicon.png">
+<link rel="icon" type="image/svg+xml" href="../../assets/logo.svg">
+<link rel="preload" href="../../assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/site.css?v=3">
+<link rel="stylesheet" href="../../assets/blog.css?v=3">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"KeyStow Year in Review: What Shipped in 2026","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"publisher":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"mainEntityOfPage":"https://hullashoo6.github.io/keystow/blog/keystow-2026-review/","image":"https://hullashoo6.github.io/keystow/assets/og.png","description":"Every KeyStow release of 2026, from the first v1.0.0 to v1.0.6, taken straight from the changelog: what shipped, what was fixed, what we learned.","inLanguage":"en"}</script>
+</head>
+<body>
+<div class="wrap">
+<header class="site-head">
+<a class="brand" href="../../" aria-label="KeyStow home"><img src="../../assets/logo.svg" alt="" width="34" height="34">KeyStow</a>
+<nav class="nav" aria-label="Site">
+<a class="nav-link" href="../../#how">How it works</a>
+<a class="nav-link" href="../../#why">Why KeyStow</a>
+<a class="nav-link" href="../">Blog</a>
+<a class="btn-quiet" href="https://checkout.dodopayments.com/buy/pdt_0NsLl0cF4YBUyExTYj3m1?quantity=1&amp;minimalAddress=true&amp;redirect_url=https%3A%2F%2Fhullashoo6.github.io%2Fkeystow%2Fdownload%2F">Buy, $5</a>
+</nav>
+</header>
+<main>
+
+<article class="article">
+<p class="kicker">Guides</p>
+<h1 class="article-title">KeyStow Year in Review: What Shipped in 2026</h1>
+<p class="article-meta">November 24, 2026 &middot; KeyStow &middot; <a href="../">All articles</a></p>
+
+<div class="article-body">
+<h2>Seven releases in the first week</h2>
+<p>KeyStow shipped its first release, v1.0.0, on November 17, 2026: push-to-talk voice typing for Windows and Mac. What followed was a dense first week of real-user fixes, and the changelog tells the story better than any summary could. Here it is in one place.</p>
+<h2>The releases</h2>
+<ul><li><strong>v1.0.0 (Nov 17).</strong> First release: hold a key, speak, release, and text lands where your cursor is.</li><li><strong>v1.0.1 (Nov 18).</strong> Hold-to-speak became the default for new installs; existing custom keys kept their behavior.</li><li><strong>v1.0.2 (Nov 19).</strong> A recovery update: paste-key cleanup, conditional clipboard restoration, local diagnostic logging, and safer handling of startup and sign-in registration.</li><li><strong>v1.0.3 (Nov 20).</strong> Fixed duplicated dictation from multiple running copies: one KeyStow process per user, and closing the window now truly quits.</li><li><strong>v1.0.4 (Nov 22).</strong> The activation key stopped waiting on microphone and disk work, stray sub-0.3-second taps are ignored, recordings cap at 120 seconds, clipboard restore slowed to fit slower apps, and start at login became a choice rather than a default.</li><li><strong>v1.0.5 (Nov 22).</strong> Start at sign-in switched to on by default, as a ticked installer option on Windows that later updates remember.</li><li><strong>v1.0.6 (Nov 22).</strong> The big structural fix: KeyStow now installs as ordinary files instead of unpacking about 500 MB into temp at every start. Started at sign-in it opens minimised. On Mac it gained the microphone permission entry macOS requires, Right Option as the default key, permission guidance in the window, and a clear message when exact silence reaches the microphone.</li></ul>
+<h2>The honest footnote</h2>
+<p>The changelog carries its own warning, and it belongs in any honest recap: the Mac installers of v1.0.0 through v1.0.5 could not get microphone access. v1.0.6 is the first release whose Mac app can properly ask for it. Every release&#x27;s notes also say plainly what was not yet tested on real hardware, and that practice continues.</p>
+<h2>What did not change</h2>
+<p>Through all seven releases the core promise stayed put: offline dictation on Windows and Apple Silicon Mac, your voice processed privately on your own computer and never sent to the cloud, no audio recording or transcript history kept, $5 once with no subscription and no account, and source code open under the MIT license.</p>
+
+<div class="article-cta">
+<p>KeyStow: offline voice dictation for Windows and Apple Silicon Mac. $5 once, lifetime access.</p>
+<a class="btn" href="../../">Get KeyStow</a>
+</div>
+
+<div class="article-sources">
+<h2>Sources</h2>
+<ul>
+<li>KeyStow changelog: <a href="https://github.com/hullashoo6/keystow/blob/main/CHANGELOG.md">github.com/hullashoo6/keystow/blob/main/CHANGELOG.md</a></li><li>KeyStow product page: <a href="https://hullashoo6.github.io/keystow">hullashoo6.github.io/keystow</a></li>
+</ul>
+</div>
+</div>
+</article>
+
+</main>
+<footer class="site-foot">
+<a class="brand" href="../../" aria-label="KeyStow home"><img src="../../assets/logo.svg" alt="" width="28" height="28">KeyStow</a>
+<p>Offline voice dictation for Windows and Apple Silicon Mac. Support: <a href="mailto:hullashoo6@gmail.com">hullashoo6@gmail.com</a>. &copy; 2026 KeyStow.</p>
+</footer>
+</div>
+</body>
+</html>

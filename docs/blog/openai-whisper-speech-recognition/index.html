@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What Is Whisper? The Open-Source Speech Model Behind Offline Dictation</title>
+<meta name="description" content="If you have looked at offline dictation apps lately, you have seen one name repeated: Whisper.">
+<link rel="canonical" href="https://hullashoo6.github.io/keystow/blog/openai-whisper-speech-recognition/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="KeyStow">
+<meta property="og:title" content="What Is Whisper? The Open-Source Speech Model Behind Offline Dictation">
+<meta property="og:description" content="If you have looked at offline dictation apps lately, you have seen one name repeated: Whisper.">
+<meta property="og:url" content="https://hullashoo6.github.io/keystow/blog/openai-whisper-speech-recognition/">
+<meta property="og:image" content="https://hullashoo6.github.io/keystow/assets/og.png">
+<meta property="article:published_time" content="2026-11-24">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" type="image/png" href="../../assets/favicon.png">
+<link rel="icon" type="image/svg+xml" href="../../assets/logo.svg">
+<link rel="preload" href="../../assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/site.css?v=3">
+<link rel="stylesheet" href="../../assets/blog.css?v=3">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"What Is Whisper? The Open-Source Speech Model Behind Offline Dictation","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"publisher":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"mainEntityOfPage":"https://hullashoo6.github.io/keystow/blog/openai-whisper-speech-recognition/","image":"https://hullashoo6.github.io/keystow/assets/og.png","description":"If you have looked at offline dictation apps lately, you have seen one name repeated: Whisper.","inLanguage":"en"}</script>
+</head>
+<body>
+<div class="wrap">
+<header class="site-head">
+<a class="brand" href="../../" aria-label="KeyStow home"><img src="../../assets/logo.svg" alt="" width="34" height="34">KeyStow</a>
+<nav class="nav" aria-label="Site">
+<a class="nav-link" href="../../#how">How it works</a>
+<a class="nav-link" href="../../#why">Why KeyStow</a>
+<a class="nav-link" href="../">Blog</a>
+<a class="btn-quiet" href="https://checkout.dodopayments.com/buy/pdt_0NsLl0cF4YBUyExTYj3m1?quantity=1&amp;minimalAddress=true&amp;redirect_url=https%3A%2F%2Fhullashoo6.github.io%2Fkeystow%2Fdownload%2F">Buy, $5</a>
+</nav>
+</header>
+<main>
+
+<article class="article">
+<p class="kicker">Guides</p>
+<h1 class="article-title">What Is Whisper? The Open-Source Speech Model Behind Offline Dictation</h1>
+<p class="article-meta">November 24, 2026 &middot; KeyStow &middot; <a href="../">All articles</a></p>
+
+<div class="article-body">
+<p>If you have looked at offline dictation apps lately, you have seen one name repeated: Whisper. KeyStow, Superwhisper, Handy and dozens of other tools all use it. Here is what Whisper actually is, and why it changed what a $5 dictation app can do.</p>
+<h2>Whisper in one paragraph</h2>
+<p>Whisper is a general-purpose speech recognition model released by OpenAI in 2022. Both the code and the model weights are public under the MIT license, which means anyone can download it, run it on their own hardware, and build products on top of it, for free. That is the whole reason offline dictation apps exist at consumer prices.</p>
+<h2>What it can do</h2>
+<p>Per OpenAI&#x27;s repository, Whisper is a multitasking model: beyond transcribing speech to text in many languages, it can also translate speech into English and identify which language is being spoken. It is a Transformer sequence-to-sequence model trained on a large, diverse audio dataset, so it handles accents, background noise and technical vocabulary better than older open models.</p>
+<h2>Sizes: tiny to large, plus turbo</h2>
+<p>Whisper is not one model but a family. OpenAI publishes it in sizes from tiny to large, plus a fast &quot;turbo&quot; variant. The trade-off is simple: smaller models run faster and need less memory; larger models are more accurate. This is why apps like KeyStow let you pick a model size in settings: on a fast machine you can run a bigger model for better accuracy, on an older laptop a small one keeps up in real time.</p>
+<h2>Why it matters for privacy</h2>
+<p>Before Whisper, good dictation mostly meant sending your microphone audio to a company&#x27;s servers, because the accurate models only ran in data centers. Whisper made high-quality transcription something your own laptop can do. An app that runs Whisper locally can transcribe your voice with no internet connection and no audio ever leaving your computer. That is exactly how KeyStow works: Whisper runs on your machine, your voice is processed privately on your own computer and never sent to the cloud.</p>
+<h2>Where to try it</h2>
+<ul><li><strong>KeyStow</strong> ($5 once): Whisper-powered hold-to-talk dictation for Windows and Apple Silicon Mac, with selectable model sizes.</li><li><strong>Handy</strong> (free, open source): Whisper and Parakeet dictation for Windows, macOS and Linux.</li><li><strong>The Whisper repository itself</strong>: if you write code, you can run the model directly from OpenAI&#x27;s GitHub repo.</li></ul>
+
+<div class="article-cta">
+<p>KeyStow: offline voice dictation for Windows and Apple Silicon Mac. $5 once, lifetime access.</p>
+<a class="btn" href="../../">Get KeyStow</a>
+</div>
+
+<div class="article-sources">
+<h2>Sources</h2>
+<ul>
+<li>OpenAI Whisper repository (description, approach, model sizes, MIT license): <a href="https://github.com/openai/whisper">github.com/openai/whisper</a></li><li>KeyStow: <a href="https://hullashoo6.github.io/keystow">hullashoo6.github.io/keystow</a></li><li>Handy: <a href="https://github.com/cjpais/Handy">github.com/cjpais/Handy</a></li>
+</ul>
+</div>
+</div>
+</article>
+
+</main>
+<footer class="site-foot">
+<a class="brand" href="../../" aria-label="KeyStow home"><img src="../../assets/logo.svg" alt="" width="28" height="28">KeyStow</a>
+<p>Offline voice dictation for Windows and Apple Silicon Mac. Support: <a href="mailto:hullashoo6@gmail.com">hullashoo6@gmail.com</a>. &copy; 2026 KeyStow.</p>
+</footer>
+</div>
+</body>
+</html>

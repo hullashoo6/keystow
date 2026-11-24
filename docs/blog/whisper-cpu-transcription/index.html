@@ -42,13 +42,13 @@
 
 <div class="article-body">
 <h2>The GPU myth</h2>
-<p>Because AI headlines revolve around giant data-center GPUs, many people assume local speech recognition needs a gaming rig. It does not. Dictation transcribes one voice in real time, which is a far smaller job than training a model, and modern laptop processors handle it comfortably.</p>
+<p>Because AI headlines revolve around giant data-center GPUs, many people assume local speech recognition needs a gaming rig. It does not. Dictation transcribes one voice at a time, which is a far smaller job than training a model, and modern laptop processors are built for it.</p>
 <h2>What the CPU actually does</h2>
-<p>When you speak, the app slices your audio into short windows and runs them through the speech model on the processor. The model sizes used for everyday dictation are small enough that an ordinary laptop CPU transcribes faster than you talk. You speak for ten seconds, and the text is ready in a moment after you stop.</p>
+<p>When you speak, the app slices your audio into short windows and runs them through the speech model on the processor. The model sizes used for everyday dictation are small enough to run on an ordinary laptop CPU. How fast the text appears after you stop speaking depends on your hardware, the model size and the length of the take; shorter takes come back sooner.</p>
 <h2>What changes with bigger models</h2>
 <p>Larger speech models are more accurate with accents, noise and rare words, and they need more compute. On a CPU they still work; they just take longer per chunk. A discrete GPU speeds up the big models, which matters for batch-transcribing hours of recordings. For live dictation with a small or standard model, it is rarely the bottleneck.</p>
 <h2>Practical guidance</h2>
-<ul><li><strong>Start with the default or smaller model.</strong> If it keeps up and the accuracy suits you, stop there.</li><li><strong>Step up only if you hear the errors.</strong> Heavy accents or noisy rooms may justify a larger model; quiet offices usually do not.</li><li><strong>Do not buy hardware for dictation.</strong> Any laptop that runs a modern browser comfortably will run offline dictation.</li></ul>
+<ul><li><strong>Start with the default or smaller model.</strong> If the accuracy suits you, stop there.</li><li><strong>Step up only if you hear the errors.</strong> Heavy accents or noisy rooms may justify a larger model; quiet offices usually do not.</li><li><strong>Do not buy hardware for dictation.</strong> Any laptop that runs a modern browser comfortably will run offline dictation.</li></ul>
 <h2>How KeyStow fits</h2>
 <p>KeyStow is an offline voice dictation app for Windows and Apple Silicon Mac that runs on your computer&#x27;s own processor, with the default model bundled in the installer and larger models available as options for those who want them. Hold Right Ctrl on Windows (Right Option on a Mac), speak, release, and text is typed where the cursor is. Your voice is processed privately on your own computer and never sent to the cloud, dictation works without internet, and KeyStow does not keep an audio recording or transcript history. It costs $5 once, with no subscription and no account, and the source code is open under the MIT license.</p>
 

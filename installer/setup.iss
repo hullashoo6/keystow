@@ -1,5 +1,9 @@
 #define MyAppName "KeyStow"
-#define MyAppVersion "1.0.6"
+; The version lives in keystow/__init__.py. The release workflow passes it in
+; with /DMyAppVersion=...; a build made by hand without it is marked 0.0.0.
+#ifndef MyAppVersion
+#define MyAppVersion "0.0.0"
+#endif
 #define MyAppPublisher "KeyStow"
 #define MyAppExeName "KeyStow.exe"
 ; Passed by the sign-in entry so the app starts minimised (keystow/autostart.py).
@@ -10,6 +14,8 @@ AppId={{8F3A2B71-9C4E-4D2A-A5F1-KEYST0W00001}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+; Version details shown in the installer file's Properties.
+VersionInfoVersion={#MyAppVersion}
 ; Per-user program folder. Existing installs keep their previous folder on
 ; upgrade (Inno Setup's UsePreviousAppDir default); only new installs move.
 DefaultDirName={localappdata}\Programs\{#MyAppName}
@@ -35,11 +41,15 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 ; folder first so files a new version no longer ships cannot linger. Settings
 ; and word counts live in the user's .keystow folder and are not touched.
 Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\licenses"
 
 [Files]
 ; Ordinary installed files. Versions up to 1.0.5 were one self-extracting file
 ; that unpacked about 500 MB into the temp folder at every start.
 Source: "..\dist\KeyStow\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; KeyStow's licence and the licences of the third-party software inside it,
+; gathered by installer/collect_licenses.py before the build.
+Source: "..\build-licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -54,6 +64,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch KeyStow"; Flags: nowait 
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\licenses"
 
 [Code]
 // The sign-in entry can be created by Setup or by the app's tray toggle, so

@@ -1,22 +1,39 @@
 name: Build and release KeyStow installers
 
-# Manual only. Nothing is built or published on a push. A release happens when
-# this workflow is run from main with the version to publish, and that version
-# must already be the one written in installer/setup.iss and keystow/__init__.py.
+# Two ways in.
+#
+# A pull request that touches the app or its build: both installers are built
+# and checked exactly as for a release and kept as downloadable artifacts.
+# Nothing is published.
+#
+# Run by hand from main, with the version to publish. That version must be the
+# one in keystow/__init__.py and must have a section in CHANGELOG.md. By
+# default it is published as a pre-release: the website keeps serving the
+# previous release until the installers have been tried on real computers and
+# the "Promote a tested pre-release" workflow is run.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish, for example 1.0.6
+        description: Version to publish, for example 1.0.7 (must match keystow/__init__.py)
         required: true
         type: string
+      prerelease:
+        description: Publish as a pre-release for testing; the website keeps serving the previous release
+        type: boolean
+        default: true
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'notes/**'
+      - '**.md'
 
 permissions:
   contents: read
 
 concurrency:
-  group: keystow-release
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'workflow_dispatch' && 'keystow-release' || format('keystow-check-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # The speech model that ships inside the app, pinned to an exact revision.
@@ -28,31 +45,41 @@ jobs:
     name: Check version and branch
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Refuse anything but a new version built from main
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Read the version; a release must be a new version built from main
+        id: version
         env:
-          VERSION: ${{ inputs.version }}
+          REQUESTED: ${{ inputs.version }}
+          EVENT: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 1.0.6"; exit 1; }
-          test "$GITHUB_REF" = refs/heads/main || { echo "Run this workflow from main"; exit 1; }
-          tr -d '\r' < installer/setup.iss | grep -Fxq "#define MyAppVersion \"$VERSION\"" || { echo "installer/setup.iss does not say $VERSION"; exit 1; }
-          tr -d '\r' < keystow/__init__.py | grep -Fxq "__version__ = \"$VERSION\"" || { echo "keystow/__init__.py does not say $VERSION"; exit 1; }
-          grep -Fq "v$VERSION" installer/release-notes.md || { echo "installer/release-notes.md is not written for v$VERSION"; exit 1; }
-          existing=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v$VERSION" --jq 'length')
-          test "$existing" = 0 || { echo "A tag starting with v$VERSION already exists"; exit 1; }
+          VERSION=$(tr -d '\r' < keystow/__init__.py | sed -n 's/^__version__ = "\(.*\)"$/\1/p')
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "keystow/__init__.py has no version that looks like 1.0.7"; exit 1; }
+          python3 installer/release_notes.py "$VERSION" > /dev/null || { echo "CHANGELOG.md has no notes for v$VERSION"; exit 1; }
+          if [ "$EVENT" = workflow_dispatch ]; then
+            test "$REQUESTED" = "$VERSION" || { echo "Asked to publish $REQUESTED, but keystow/__init__.py says $VERSION"; exit 1; }
+            test "$GITHUB_REF" = refs/heads/main || { echo "Run this workflow from main"; exit 1; }
+            existing=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v$VERSION" --jq 'length')
+            test "$existing" = 0 || { echo "A tag starting with v$VERSION already exists"; exit 1; }
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building KeyStow $VERSION ($EVENT)" | tee -a "$GITHUB_STEP_SUMMARY"
 
   build-windows:
     name: Windows installer
     needs: check
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
       - name: Install Python dependencies at the pinned versions
@@ -65,6 +92,10 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Generate app icons
         run: python installer/make_icons.py
+      - name: Gather third-party licences and write the version details for KeyStow.exe
+        run: |
+          python installer/collect_licenses.py build-licenses
+          python installer/make_version_file.py "$env:VERSION" build-version-info.txt
       - name: Fetch RNNoise native library
         run: |
           pip download pyrnnoise==0.4.5 --no-deps --platform win_amd64 --python-version 3.11 --only-binary :all: -d vendor_dl
@@ -77,12 +108,14 @@ jobs:
       # at every start and left it behind after an unclean exit.
       - name: Build the KeyStow folder with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name KeyStow --icon installer\keystow.ico --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
-      - name: Check the folder has the app, the speech model and the noise library
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer\keystow.ico --version-file build-version-info.txt --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      - name: Check the folder has the app, its version, the speech model, the noise library and the licences
         run: |
-          foreach ($path in 'dist\KeyStow\KeyStow.exe', 'dist\KeyStow\_internal\models\faster-whisper-base\model.bin', 'dist\KeyStow\_internal\keystow\vendor\rnnoise.dll') {
+          foreach ($path in 'dist\KeyStow\KeyStow.exe', 'dist\KeyStow\_internal\models\faster-whisper-base\model.bin', 'dist\KeyStow\_internal\keystow\vendor\rnnoise.dll', 'build-licenses\THIRD-PARTY-NOTICES.txt', 'build-licenses\LICENSE.txt', 'build-licenses\texts\GPL-3.0.txt') {
             if (-not (Test-Path $path)) { throw "Missing from the build: $path" }
           }
+          $reported = (Get-Item dist\KeyStow\KeyStow.exe).VersionInfo.ProductVersion
+          if ($reported -ne $env:VERSION) { throw "KeyStow.exe reports version '$reported', expected $env:VERSION" }
       - name: Packaged app must load its own model and recognise the speech sample
         run: python installer/verify_self_test.py dist/KeyStow/KeyStow.exe release-evidence
       - name: Packaged app must open its window, refuse a second copy and close cleanly
@@ -90,19 +123,22 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer
-        run: iscc installer\setup.iss
+        run: iscc "/DMyAppVersion=$env:VERSION" installer\setup.iss
       - name: Stage Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-installer
           path: installer/installer/KeyStowSetup.exe
+          retention-days: 14
           if-no-files-found: error
       - name: Keep the packaged-app check evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-evidence
-          path: release-evidence/
+          path: |
+            release-evidence/
+            build-licenses/THIRD-PARTY-NOTICES.txt
           retention-days: 30
           if-no-files-found: ignore
 
@@ -111,12 +147,14 @@ jobs:
     needs: check
     runs-on: macos-latest
     timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
       - name: Require an Apple Silicon build machine
@@ -129,25 +167,27 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
-      - name: Generate app icon and fetch the bundled speech model at its pinned revision
+      - name: Generate app icon, gather third-party licences and fetch the bundled speech model at its pinned revision
         run: |
           python installer/make_icons.py
+          python installer/collect_licenses.py build-licenses
           python -c "import os; from huggingface_hub import snapshot_download; snapshot_download(os.environ['MODEL_REPO'], revision=os.environ['MODEL_REVISION'], local_dir='models/faster-whisper-base')"
       # A normal app bundle with its files inside it, not a single file that
       # unpacks itself into the temp folder at every start.
       - name: Build KeyStow.app with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --add-data 'build-licenses:licenses' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
           test -x dist/KeyStow.app/Contents/MacOS/KeyStow
           test -n "$(find dist/KeyStow.app -type f -path '*models/faster-whisper-base/model.bin' -print -quit)"
+          test -n "$(find dist/KeyStow.app -type f -path '*licenses/THIRD-PARTY-NOTICES.txt' -print -quit)"
       # macOS gives an app no microphone audio, and shows no permission prompt,
-      # unless Info.plist says why the app wants the microphone. Editing
-      # Info.plist breaks the signature PyInstaller applied, and Apple Silicon
-      # refuses to open an app with a broken signature: edit first, sign
-      # afterwards, and do not touch the bundle again.
-      - name: Set the version and microphone reason, then ad-hoc sign with no further bundle edits
-        env:
-          VERSION: ${{ inputs.version }}
+      # unless Info.plist says why the app wants the microphone. The libraries
+      # inside need macOS 14, so Info.plist says that too and an older macOS
+      # refuses with a clear message instead of the app failing to open.
+      # Editing Info.plist breaks the signature PyInstaller applied, and Apple
+      # Silicon refuses to open an app with a broken signature: edit first,
+      # sign afterwards, and do not touch the bundle again.
+      - name: Set the version, minimum macOS and microphone reason, then ad-hoc sign with no further bundle edits
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -159,6 +199,7 @@ jobs:
               CFBundleShortVersionString=os.environ['VERSION'],
               CFBundleVersion=os.environ['VERSION'],
               CFBundleIdentifier='com.keystow.app',
+              LSMinimumSystemVersion='14.0',
               NSMicrophoneUsageDescription='KeyStow listens while you hold your shortcut and turns your speech into text on this Mac. Audio is not saved or sent anywhere.',
           )
           with open(path, 'wb') as handle:
@@ -191,8 +232,6 @@ jobs:
           mkdir -p release-evidence
           echo "Mac launch check on the signed app copy - $OUTCOME" | tee -a "$GITHUB_STEP_SUMMARY" release-evidence/mac-launch-check.txt
       - name: Package the DMG and verify the app inside the mounted image
-        env:
-          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           mkdir -p dist/dmg
@@ -211,19 +250,23 @@ jobs:
               info = plistlib.load(handle)
           assert info['CFBundleShortVersionString'] == os.environ['VERSION'], info['CFBundleShortVersionString']
           assert info.get('NSMicrophoneUsageDescription'), 'the microphone reason is missing'
+          assert info.get('LSMinimumSystemVersion') == '14.0', info.get('LSMinimumSystemVersion')
           print('version', info['CFBundleShortVersionString'])
           print('identifier', info['CFBundleIdentifier'])
+          print('minimum macOS', info['LSMinimumSystemVersion'])
           print('microphone reason present')
           PY
+          test -n "$(find "$RUNNER_TEMP/keystow-mounted/KeyStow.app" -type f -path '*licenses/THIRD-PARTY-NOTICES.txt' -print -quit)"
       - name: Stage Mac installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mac-installer
           path: dist/KeyStowMac.dmg
+          retention-days: 14
           if-no-files-found: error
       - name: Keep the signing and app check evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mac-evidence
           path: release-evidence/
@@ -232,20 +275,21 @@ jobs:
 
   publish:
     name: Publish the release
+    if: github.event_name == 'workflow_dispatch'
     needs: [check, build-windows, build-mac]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Download this run's Windows installer
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: windows-installer
           path: installers
       - name: Download this run's Mac installer
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: mac-installer
           path: installers
@@ -257,10 +301,13 @@ jobs:
           sha256sum installers/KeyStowSetup.exe installers/KeyStowMac.dmg | tee -a "$GITHUB_STEP_SUMMARY"
       # Upload as a draft first. The release only becomes public after GitHub's
       # stored size and SHA-256 for each file match the files built in this run.
-      # Earlier releases and their download links are never touched.
+      # Earlier releases and their download links are never touched. The notes
+      # are this version's section of CHANGELOG.md, followed by the SHA-256 of
+      # each installer.
       - name: Upload as a draft, compare what GitHub stored, then publish
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.check.outputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
@@ -270,6 +317,11 @@ jobs:
             echo "A release for $tag already exists; refusing to overwrite it"
             exit 1
           fi
+          python3 installer/release_notes.py "$VERSION" > notes.md
+          {
+            printf '\n\nSHA-256 of the installers:\n\n'
+            (cd installers && sha256sum KeyStowSetup.exe KeyStowMac.dmg | sed 's/^/    /')
+          } >> notes.md
           published=0
           cleanup() {
             if [ "$published" = 0 ]; then
@@ -278,23 +330,15 @@ jobs:
             fi
           }
           trap cleanup EXIT
-          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "KeyStow $tag" --notes-file installer/release-notes.md installers/KeyStowSetup.exe installers/KeyStowMac.dmg
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "KeyStow $tag" --notes-file notes.md installers/KeyStowSetup.exe installers/KeyStowMac.dmg
           gh api "repos/$GH_REPO/releases?per_page=30" > releases.json
-          python3 - "$tag" <<'PY'
-          import hashlib, json, pathlib, sys
-          tag = sys.argv[1]
-          drafts = [r for r in json.load(open('releases.json')) if r.get('draft') and r.get('tag_name') == tag]
-          assert len(drafts) == 1, f'expected one draft for {tag}, found {len(drafts)}'
-          assets = {a['name']: a for a in drafts[0]['assets']}
-          assert set(assets) == {'KeyStowSetup.exe', 'KeyStowMac.dmg'}, sorted(assets)
-          for name, asset in assets.items():
-              data = pathlib.Path('installers', name).read_bytes()
-              assert asset.get('state') == 'uploaded', (name, asset.get('state'))
-              assert asset.get('size') == len(data), (name, asset.get('size'), len(data))
-              assert asset.get('digest') == 'sha256:' + hashlib.sha256(data).hexdigest(), (name, asset.get('digest'))
-              print(f'{name}: size and SHA-256 match the built file')
-          PY
-          gh release edit "$tag" --draft=false --latest
+          python3 installer/verify_release_assets.py releases.json installers "$tag"
+          if [ "$PRERELEASE" = true ]; then
+            gh release edit "$tag" --draft=false --prerelease
+            echo "Published $tag as a pre-release from $GITHUB_SHA. The website still serves the previous release. Try both installers on real computers, then run the Promote a tested pre-release workflow." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            gh release edit "$tag" --draft=false --prerelease=false --latest
+            echo "Published $tag from $GITHUB_SHA as the latest release" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
           published=1
           test "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"
-          echo "Published $tag from $GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY"

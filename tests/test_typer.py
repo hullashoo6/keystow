@@ -81,10 +81,49 @@ class TyperTest(unittest.TestCase):
         self.m.type_text('retry')
         self.assertEqual(self.clipboard,'previous')
 
+    def mac(self,trusted=True,controller=None,key=None):
+        """Stand-in for keystow.mac_input: no real macOS call is made."""
+        return types.SimpleNamespace(accessibility_trusted=lambda:trusted,controller=lambda:controller,paste_key=lambda:key)
+
     def test_mac_modifier_and_disabled_restore(self):
-        with patch.object(self.m.sys,'platform','darwin'):self.m.type_text('new',restore_clipboard=False)
+        with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=self.mac()):
+            self.m.type_text('new',restore_clipboard=False)
         self.assertEqual(self.events[0],('press','cmd'))
         self.assertEqual(self.clipboard,'new')
+
+    def test_mac_pastes_with_the_physical_v_key_on_the_main_thread_controller(self):
+        sent=[];shared=Mock()
+        shared.press.side_effect=lambda k:sent.append(('press',k))
+        shared.release.side_effect=lambda k:sent.append(('release',k))
+        with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=self.mac(controller=shared,key='V-KEY')):
+            self.m.type_text('new')
+        self.assertEqual(sent,[('press','cmd'),('press','V-KEY'),('release','V-KEY'),('release','cmd')])
+        self.assertEqual(self.events,[])  # no Controller was created on this thread
+        self.assertEqual(self.clipboard,'previous')
+
+    def test_mac_without_accessibility_sends_no_keys_and_leaves_text_on_clipboard(self):
+        with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=self.mac(trusted=False)):
+            with self.assertRaises(self.m.PasteBlocked) as caught:self.m.type_text('new')
+        self.assertTrue(caught.exception.left_on_clipboard)
+        self.assertEqual(self.events,[])
+        self.assertEqual(self.clipboard,'new')
+
+    def test_mac_unknown_accessibility_state_still_pastes(self):
+        with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=self.mac(trusted=None)):
+            self.m.type_text('new')
+        self.assertEqual(self.events,[('press','cmd'),('press','v'),('release','v'),('release','cmd')])
+        self.assertEqual(self.clipboard,'previous')
+
+    def test_mac_helpers_unavailable_falls_back_to_the_plain_paste(self):
+        with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=None):
+            self.m.type_text('new')
+        self.assertEqual(self.events,[('press','cmd'),('press','v'),('release','v'),('release','cmd')])
+
+    def test_windows_never_consults_the_mac_helpers(self):
+        with patch.object(self.m,'_mac_input',side_effect=AssertionError('Mac helpers used on Windows')):
+            self.m.type_text('new')
+        self.assertEqual(self.events,[('press','ctrl'),('press','v'),('release','v'),('release','ctrl')])
+        self.assertEqual(self.clipboard,'previous')
 
     def test_interruption_before_dispatch_preserves_new_copy_and_original_error(self):
         def interrupt(seconds):

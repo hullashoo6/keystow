@@ -23,6 +23,8 @@
 .article-body li{margin:0 0 10px;font-size:17.5px;line-height:1.6}
 .article-body a{color:var(--ink);text-underline-offset:3px}
 .article-body a:hover{color:var(--violet)}
+.article-body a.btn{color:#fff;text-decoration:none}
+.article-body a.btn:hover{color:#fff;background:#2b2b34}
 .article-table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:15px;line-height:1.45}
 .article-table th{text-align:left;font-weight:600;padding:10px 12px;border-bottom:2px solid var(--ink)}
 .article-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--slate)}
@@ -36,6 +38,15 @@
 .article-sources ul{margin:0;padding-left:20px}
 .article-sources li{margin:0 0 8px;font-size:14.5px;color:var(--slate)}
 .article-sources a{color:var(--slate);text-underline-offset:3px;word-break:break-all}
+
+@media (max-width:720px){
+  .article-table-wrap{overflow-x:visible}
+  .article-table,.article-table tbody{display:block;width:100%}
+  .article-table thead{display:none}
+  .article-table tr{display:block;margin:0 0 16px;padding:6px 0;border:1px solid var(--line);border-radius:14px}
+  .article-table td{display:grid;grid-template-columns:108px minmax(0,1fr);gap:10px;padding:8px 14px;border-bottom:none;overflow-wrap:anywhere}
+  .article-table td::before{content:attr(data-label);font-weight:600;color:var(--ink)}
+}
 
 @media (max-width:560px){
   .blog{padding:24px 0 72px}

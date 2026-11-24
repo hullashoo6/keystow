@@ -226,3 +226,5 @@ class RealPynputTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+# CI re-run marker, 24 Nov: no change to the tests; added only to start a new check run.

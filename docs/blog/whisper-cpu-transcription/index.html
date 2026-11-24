@@ -44,7 +44,7 @@
 <h2>The GPU myth</h2>
 <p>Because AI headlines revolve around giant data-center GPUs, many people assume local speech recognition needs a gaming rig. It does not. Dictation transcribes one voice at a time, which is a far smaller job than training a model, and modern laptop processors are built for it.</p>
 <h2>What the CPU actually does</h2>
-<p>When you speak, the app slices your audio into short windows and runs them through the speech model on the processor. The model sizes used for everyday dictation are small enough to run on an ordinary laptop CPU. How fast the text appears after you stop speaking depends on your hardware, the model size and the length of the take; shorter takes come back sooner.</p>
+<p>How the work reaches the CPU depends on the app: some transcribe in short chunks while you speak, and others record your take and transcribe it when you stop. Either way, the model sizes used for everyday dictation are small enough to run on an ordinary laptop CPU. How fast the text appears after you stop speaking depends on your hardware, the model size and the length of the take; shorter takes come back sooner.</p>
 <h2>What changes with bigger models</h2>
 <p>Larger speech models are more accurate with accents, noise and rare words, and they need more compute. On a CPU they still work; they just take longer per chunk. A discrete GPU speeds up the big models, which matters for batch-transcribing hours of recordings. For live dictation with a small or standard model, it is rarely the bottleneck.</p>
 <h2>Practical guidance</h2>

@@ -154,11 +154,21 @@ jobs:
           ditto dist/KeyStow.app dist/dmg/KeyStow.app
           ln -s /Applications dist/dmg/Applications
           cp "installer/mac/Open KeyStow the first time.txt" dist/dmg/
-          hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
+          # hdiutil on hosted Macs sometimes fails with "Resource busy" while a
+          # background service briefly holds the new image: retry a few times.
+          retry() {
+            for attempt in 1 2 3 4 5; do
+              "$@" && return 0
+              echo "attempt $attempt of: $* failed; retrying in 15 s"
+              sleep 15
+            done
+            return 1
+          }
+          retry hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
           hdiutil verify dist/KeyStowMac.dmg 2>&1 | tee release-evidence/dmg-verify.txt
           mkdir -p "$RUNNER_TEMP/keystow-mounted"
-          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/keystow-mounted" dist/KeyStowMac.dmg
-          trap 'hdiutil detach "$RUNNER_TEMP/keystow-mounted"' EXIT
+          retry hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/keystow-mounted" dist/KeyStowMac.dmg
+          trap 'retry hdiutil detach "$RUNNER_TEMP/keystow-mounted" || hdiutil detach -force "$RUNNER_TEMP/keystow-mounted"' EXIT
           test -f "$RUNNER_TEMP/keystow-mounted/Open KeyStow the first time.txt"
           codesign --verify --deep --strict "$RUNNER_TEMP/keystow-mounted/KeyStow.app"
           venv/bin/python - "$RUNNER_TEMP/keystow-mounted/KeyStow.app/Contents/Info.plist" <<'PY' | tee release-evidence/mounted-app-info.txt

@@ -279,6 +279,27 @@ class DeliverDecisionTest(unittest.TestCase):
             result = wd.deliver("Synthetic text.", self.target)
         self.assertEqual((result.reason, self.owner.restored, len(self.sent)), ("keys_blocked", 1, 1))
 
+    def test_stuck_clipboard_thread_before_sending_gives_up_cleanly(self):
+        def stuck(fn, timeout=5.0):
+            raise TimeoutError("the clipboard thread did not respond")
+        self.owner.call = stuck
+        with patch.object(wd, "_abandon_owner") as abandon:
+            result = wd.deliver("Synthetic text.", self.target)
+        self.assertEqual((result.outcome, result.reason, self.sent), (wd.MANUAL, "clipboard_busy", []))
+        abandon.assert_called_once_with(self.owner)
+
+    def test_stuck_clipboard_thread_after_sending_is_reported_unconfirmed(self):
+        calls = []
+        def first_then_stuck(fn, timeout=5.0):
+            calls.append(fn)
+            if len(calls) > 1:
+                raise TimeoutError("the clipboard thread did not respond")
+            return fn()
+        self.owner.call = first_then_stuck
+        with patch.object(wd, "_abandon_owner"):
+            result = wd.deliver("Synthetic text.", self.target)
+        self.assertEqual((result.outcome, len(self.sent)), (wd.UNCONFIRMED, 1))
+
     def test_unsafe_previous_clipboard_sends_nothing(self):
         self.owner.offer = lambda text, pid: "clipboard_format_768"
         result = wd.deliver("Synthetic text.", self.target)

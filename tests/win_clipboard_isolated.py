@@ -50,12 +50,27 @@ from keystow import win_delivery as wd  # noqa: E402
 W = wd.W
 W.GetClipboardData.restype = wt.HANDLE
 
-# A stand-in "other app": its own window on this (main) thread.
-APP = W.CreateWindowExW(0, "STATIC", "pretend app", 0, 0, 0, 0, 0, wd.HWND_MESSAGE, None, None, None)
+# A stand-in "other app": a window on its own thread with a message loop, as
+# every real app has. (Windows notifies the previous clipboard owner and waits
+# for it whenever the clipboard is emptied, so the owner must be answering.)
+class _App(wd._Owner):
+    CLASS_NAME = "KeyStowTestApp"
+
+
+APP_THREAD = _App()
+APP = APP_THREAD.hwnd
 HTML = W.RegisterClipboardFormatW("HTML Format")
 PRIVATE = W.RegisterClipboardFormatW("KeyStowTest Private Bytes")
 
 
+def on_app(fn):
+    """Run fn on the stand-in app's own thread, as that app would."""
+    def run(*args):
+        return APP_THREAD.call(lambda: fn(*args))
+    return run
+
+
+@on_app
 def app_write(formats):
     assert wd._open_clipboard(APP)
     try:
@@ -70,6 +85,7 @@ def text(s):
     return s.encode("utf-16-le") + b"\0\0"
 
 
+@on_app
 def app_read(fmt=wd.CF_UNICODETEXT):
     assert wd._open_clipboard(APP)
     try:
@@ -88,6 +104,7 @@ def app_read(fmt=wd.CF_UNICODETEXT):
     return raw
 
 
+@on_app
 def app_formats():
     assert wd._open_clipboard(APP)
     try:

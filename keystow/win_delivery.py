@@ -25,6 +25,7 @@ What this module does instead:
 
 import ctypes
 import ctypes.wintypes as wt
+import itertools
 import logging
 import os
 import queue
@@ -40,6 +41,8 @@ CONFIRM_TIMEOUT_SECONDS = 3.0
 RESTORE_GRACE_SECONDS = 0.25
 # Do not snapshot (and later restore) a previous clipboard larger than this.
 SNAPSHOT_LIMIT_BYTES = 32 * 1024 * 1024
+
+_class_numbers = itertools.count(1)
 
 # Outcomes reported to the controller.
 CONFIRMED = "confirmed"        # the target app read the dictation
@@ -354,12 +357,16 @@ class _Owner:
 
     def _run(self):
         instance = W.GetModuleHandleW(None)
+        # A class per instance: a window class sends every window's messages
+        # to the procedure it was registered with, so a replacement thread
+        # must never share the class of one that stopped answering.
+        self._class_name = f"{self.CLASS_NAME}{next(_class_numbers)}"
         wc = _WNDCLASSW()
         wc.lpfnWndProc = self._proc
         wc.hInstance = instance
-        wc.lpszClassName = self.CLASS_NAME
-        W.RegisterClassW(ctypes.byref(wc))  # fails harmlessly if already registered
-        self.hwnd = W.CreateWindowExW(0, self.CLASS_NAME, "KeyStow clipboard", 0, 0, 0, 0, 0,
+        wc.lpszClassName = self._class_name
+        W.RegisterClassW(ctypes.byref(wc))
+        self.hwnd = W.CreateWindowExW(0, self._class_name, "KeyStow clipboard", 0, 0, 0, 0, 0,
                                       HWND_MESSAGE, None, instance, None)
         self._formats = {
             name: W.RegisterClipboardFormatW(name)
@@ -545,6 +552,21 @@ def _get_owner() -> _Owner:
         return _owner
 
 
+def _abandon_owner(owner) -> None:
+    """Stop using a clipboard thread that stopped answering.
+
+    Emptying the clipboard makes Windows notify the previous owner and wait
+    for it. An app that is busy and not processing messages can therefore
+    hold KeyStow's clipboard thread. Rather than stay stuck, use a new
+    thread next time; the old one finishes on its own once the app answers.
+    """
+    global _owner
+    with _owner_lock:
+        if _owner is owner:
+            _owner = None
+    logging.warning("clipboard thread did not respond; starting a new one next time")
+
+
 def _key_inputs(events):
     array = (_INPUT * len(events))()
     for i, (vk, flags) in enumerate(events):
@@ -580,6 +602,17 @@ def deliver(text: str, target) -> Result:
     if not _modifiers_released():
         return Result(MANUAL, "modifier_held")
     owner = _get_owner()
+    progress = {"sent": False}
+    try:
+        return _deliver_with(owner, text, target, progress)
+    except TimeoutError:
+        _abandon_owner(owner)
+        if progress["sent"]:
+            return Result(UNCONFIRMED, "clipboard_busy")
+        return Result(MANUAL, "clipboard_busy")
+
+
+def _deliver_with(owner, text, target, progress) -> Result:
     status = owner.call(lambda: owner.offer(text, target.pid))
     if status != "ok":
         return Result(MANUAL, status)
@@ -589,6 +622,7 @@ def deliver(text: str, target) -> Result:
         return Result(MANUAL, "focus_changed")
     owner.mark_sent()
     sent = _send_ctrl_v()
+    progress["sent"] = sent > 0
     if sent == 0:
         owner.call(owner.restore_if_owned)
         return Result(MANUAL, "keys_blocked")
@@ -606,4 +640,8 @@ def deliver(text: str, target) -> Result:
 def copy_text(text: str) -> bool:
     """Put text on the clipboard because the user asked for it."""
     owner = _get_owner()
-    return bool(owner.call(lambda: owner.copy_plain(text)))
+    try:
+        return bool(owner.call(lambda: owner.copy_plain(text)))
+    except TimeoutError:
+        _abandon_owner(owner)
+        return False

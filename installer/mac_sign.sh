@@ -54,7 +54,11 @@ codesign --verify --deep --strict --verbose=2 "$app" 2>&1 | tee "$evidence/app-s
 codesign -d --verbose=4 "$app" 2>&1 | tee "$evidence/app-signature-details.txt"
 codesign -d -r- "$app" 2>&1 | tee "$evidence/designated-requirement.txt"
 if [ "$identity" != "-" ]; then
-  # A stable identity means the requirement names the certificate, not one build's hash.
-  grep -q "certificate leaf" "$evidence/designated-requirement.txt" || {
-    echo "The designated requirement does not name KeyStow's certificate"; exit 1; }
+  # A stable identity means the requirement names this certificate (for a
+  # self-signed certificate macOS writes "certificate root"; the root is the
+  # certificate itself) and the bundle ID, not one build's hash.
+  fingerprint=$(printf '%s' "$identity" | tr 'A-F' 'a-f')
+  grep -Eq "identifier \"com\.keystow\.app\" and certificate (leaf|root) = H\"$fingerprint\"" \
+    "$evidence/designated-requirement.txt" || {
+    echo "The designated requirement does not name KeyStow's certificate ($fingerprint)"; exit 1; }
 fi

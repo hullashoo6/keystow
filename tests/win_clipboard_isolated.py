@@ -101,9 +101,17 @@ def app_formats():
         W.CloseClipboard()
 
 
+import faulthandler  # noqa: E402
+
 report = {}
 owner = wd._Owner()
 me = os.getpid()
+# If anything hangs, print every thread's stack instead of a bare timeout.
+faulthandler.dump_traceback_later(40, exit=True)
+
+
+def step(name):
+    print(f"step: {name}", file=sys.stderr, flush=True)
 
 
 def offer(s):
@@ -113,6 +121,7 @@ def offer(s):
 
 
 # 1. Confirmed read, then the previous text comes back.
+step("1")
 app_write({wd.CF_UNICODETEXT: text("synthetic user clipboard")})
 report["offer_ok"] = offer("Synthetic dictation one.")
 report["read_gets_dictation"] = app_read() == "Synthetic dictation one."
@@ -121,12 +130,14 @@ report["restored"] = owner.call(owner.restore_if_owned)
 report["previous_back"] = app_read() == "synthetic user clipboard"
 
 # 2. Nobody reads in time: no restore, and a late read still gets the dictation.
+step("2")
 offer("Synthetic dictation two.")
 report["unread_not_confirmed"] = not owner.wait_confirmed(0.3)
 time.sleep(0.5)
 report["late_read_gets_dictation_not_previous"] = app_read() == "Synthetic dictation two."
 
 # 3. The next dictation after an unconfirmed one restores the user's text, not dictation two.
+step("3")
 offer("Synthetic dictation three.")
 app_read()
 owner.wait_confirmed(1)
@@ -134,6 +145,7 @@ owner.call(owner.restore_if_owned)
 report["chain_restores_original_not_old_dictation"] = app_read() == "synthetic user clipboard"
 
 # 4. The user copies something (even identical text) meanwhile: theirs wins.
+step("4")
 offer("Synthetic dictation four.")
 app_read()
 app_write({wd.CF_UNICODETEXT: text("Synthetic dictation four.")})
@@ -141,6 +153,7 @@ report["user_copy_not_overwritten"] = (owner.call(owner.restore_if_owned) is Fal
                                        and app_read() == "Synthetic dictation four.")
 
 # 5. Rich and private formats survive byte for byte.
+step("5")
 rich = {wd.CF_UNICODETEXT: text("rich source"), HTML: b"Version:0.9\r\n<b>synthetic</b>\0",
         PRIVATE: bytes(range(256)) * 4}
 app_write(rich)
@@ -154,6 +167,7 @@ report["rich_formats_restored"] = (app_read(HTML).startswith(rich[HTML])
                                    and app_read() == "rich source")
 
 # 6. An empty clipboard stays empty after the round trip.
+step("6")
 app_write({})
 offer("Synthetic dictation six.")
 app_read()
@@ -162,7 +176,13 @@ owner.call(owner.restore_if_owned)
 report["empty_stays_empty"] = app_formats() == []
 
 # 7. Explicit copy puts plain text there, marked private.
+step("7")
 owner.call(lambda: owner.copy_plain("Synthetic copied text."))
 report["copy_plain"] = app_read() == "Synthetic copied text."
 
+faulthandler.cancel_dump_traceback_later()
 print(json.dumps(report))
+failed = [k for k, v in report.items() if v not in (True, "ok")]
+if failed:
+    print(f"failed checks: {failed}", file=sys.stderr)
+    sys.exit(1)

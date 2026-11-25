@@ -40,11 +40,23 @@ def setup() -> str | None:
     # dictation. That is a record of when and how long the user spoke, which
     # the log must not keep; its warnings and errors still get through.
     logging.getLogger("faster_whisper").setLevel(logging.WARNING)
+    # Download libraries log every request; keep the default log quiet.
+    for name in ("huggingface_hub", "httpx", "httpcore", "urllib3", "filelock"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     _handler = handler
 
     fault_file = None
     try:
-        fault_file = open(path, "a", encoding="utf-8")
+        # Native crash traces go to their own file. Holding keystow.log open a
+        # second time made Windows refuse to rename it, so the rotating log
+        # could never roll over. Keep the previous run's trace one start longer.
+        fault_path = os.path.join(_LOG_DIR, "fault.log")
+        try:
+            if os.path.getsize(fault_path) > 0:
+                os.replace(fault_path, fault_path + ".1")
+        except OSError:
+            pass
+        fault_file = open(fault_path, "w", encoding="utf-8")
         faulthandler.enable(fault_file)
         # Keep an explicit owner alive for as long as native tracing uses it.
         _fault_file = fault_file

@@ -1,18 +1,77 @@
-"""Tray + window icons, generated from the KeyStow soundwave glyph (concept A)."""
+"""Window, tray and installer icons, all rendered from the website's logo.svg.
 
-import base64
+LOGO_SVG is the exact text of docs/assets/logo.svg (a test keeps them equal),
+so the app, the installers and the website show the same mark. Nothing here
+is redrawn by hand: variants only remove the background square (for the Mac
+menu bar's monochrome template) or add a recording dot (listening).
+"""
 
-from PySide6.QtGui import QIcon, QPixmap
+import re
+import sys
 
-_B64 = {
-    "idle": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA6UlEQVR4nO2YQQ6DMAwE06oP7St4BK/oT9tTpRbBwRBnInnmBBd7WWUth9ZERERERESkHjey+bq+3t/nZXkiWu5E09b+P37vfRSYAbNQ3oDHiCbRrI+cDeknIJr10bOhfATKG9B1BmRnN6N+txOQnd2s+uUjUN6AUzNghh3+lyt6widglh3+qH9UT/kIaAAtgEYDaAE0GkALoNEAWgBN2IDtqkmvwlf1nLoL0B+95YoeI0ALoNGAXoWyh2NW/a4/RbOHY0Z9I0ALoEk3IJrd0YsWttDs/bsjFiwjQDWe7U4hIiIiIiIilfgAi/Jdhelufv8AAAAASUVORK5CYII=",
-    "listening": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABlElEQVR4nO2aW08CQQyFW+PvVBHlojFewaCoeMWA1xhFUUT9o/UBcOmDmCHdrcmc722TSad7dk7TmVkiAAAAAAAAAADxwZ6TS31JRlnw6ZtLLjMekxIRyf7w5UfPh3n5bWyauAnwX4hegNksJpFqQYhl4PXL1z+9Lsf5ZPzBe6q1IfUVIJWC9npteaLXpaFrgZwtplobordA9AKY1gDZKAoxDbx782LuXWnmhvGFePfDJL7ZCpD1kvbudtHUu3KR0/FbCybxo7dA9AJMVQNktZx48eHZdT9BRCRX80nt2foMyid4BchKWXtxreTSw//M39a1QG7ngvKJ3gIQwDsBbyCAdwLeQADvBLyBAN4JeBMsAD91VKvp3QpzRW+LefMrKJ+p9gL82HHv/8fhnbD+fxxYwDsBbyCAVSC+18WQr23PBHmvr+NXbc4ETQ9F+c7+IFTFr/XN48MC3gl4k7oA3O5q7zYn3w1yo6fH19O9G8zkcpRb3aCX4KNeZo0WLOA1MZ/rX2L4JLuvDgAAAAAAAAAgdr4BHbBfIm7Z6wkAAAAASUVORK5CYII=",
-    "app": "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",
-}
+from PySide6.QtCore import QByteArray, QRectF, Qt
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap
+from PySide6.QtSvg import QSvgRenderer
+
+LOGO_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 16 480 480" role="img" aria-label="KeyStow">
+<defs><linearGradient id="wave" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="512" y2="0"><stop offset="0" stop-color="#7c8cff"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+<rect x="16" y="16" width="480" height="480" rx="116" fill="#ededf1"/>
+<g fill="url(#wave)">
+<rect x="71" y="211" width="34" height="90" rx="17"/>
+<rect x="127" y="176" width="34" height="160" rx="17"/>
+<rect x="183" y="141" width="34" height="230" rx="17"/>
+<rect x="239" y="116" width="34" height="280" rx="17"/>
+<rect x="295" y="141" width="34" height="230" rx="17"/>
+<rect x="351" y="176" width="34" height="160" rx="17"/>
+<rect x="407" y="211" width="34" height="90" rx="17"/>
+</g>
+</svg>
+"""
+
+# The recording dot: red is the convention, and the dot itself is the cue,
+# so the state does not depend on colour alone.
+DOT = QColor("#e5484d")
+
+
+def _bars_only(svg: str, color: str) -> str:
+    """The logo without its background square, bars in one flat colour."""
+    svg = re.sub(r'<rect x="16" y="16"[^>]*/>\s*', "", svg)
+    return svg.replace('fill="url(#wave)"', f'fill="{color}"')
+
+
+def render(size: int, variant: str = "app") -> QImage:
+    """variant: "app" (full logo), "listening" (logo + dot), "template" or
+    "template-listening" (Mac menu bar: black bars, no square)."""
+    svg = LOGO_SVG if not variant.startswith("template") else _bars_only(LOGO_SVG, "#000000")
+    image = QImage(size, size, QImage.Format_ARGB32_Premultiplied)
+    image.fill(Qt.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.Antialiasing)
+    QSvgRenderer(QByteArray(svg.encode("utf-8"))).render(painter, QRectF(0, 0, size, size))
+    if variant.endswith("listening"):
+        d = size * 0.42
+        rect = QRectF(size - d - size * 0.02, size - d - size * 0.02, d, d)
+        painter.setPen(QPen(QColor("#ffffff"), max(1.0, size * 0.06)))
+        painter.setBrush(QColor("#000000") if variant.startswith("template") else DOT)
+        painter.drawEllipse(rect)
+    painter.end()
+    return image
+
+
+def _icon(variant: str, sizes=(16, 20, 24, 32, 40, 48, 64, 128, 256)) -> QIcon:
+    icon = QIcon()
+    for s in sizes:
+        icon.addPixmap(QPixmap.fromImage(render(s, variant)))
+    return icon
 
 
 def icon(name: str, fallback=None) -> QIcon:
-    pm = QPixmap()
-    if pm.loadFromData(base64.b64decode(_B64[name])):
-        return QIcon(pm)
-    return fallback() if fallback else QIcon()
+    """"app", "idle" or "listening". On a Mac the tray icons follow the menu bar."""
+    try:
+        if sys.platform == "darwin" and name in ("idle", "listening"):
+            result = _icon("template" if name == "idle" else "template-listening", sizes=(18, 36))
+            result.setIsMask(True)  # macOS tints template images for light/dark menu bars
+            return result
+        return _icon("listening" if name == "listening" else "app")
+    except Exception:  # noqa: BLE001 - an icon must never stop the app starting
+        return fallback() if fallback else QIcon()

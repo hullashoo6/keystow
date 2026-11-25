@@ -93,11 +93,13 @@ class VoiceController:
         copy_requested = getattr(window, "copy_requested", None)
         if copy_requested is not None:
             copy_requested.connect(self.copy_latest)
-        if self._toggle:
-            window.record_toggled.connect(self.toggle_recording)
-        else:
-            window.record_pressed.connect(self.start_recording)
-            window.record_released.connect(self.stop_recording)
+        # The window emits only the signals that fit the current mode.
+        window.record_toggled.connect(self.toggle_recording)
+        window.record_pressed.connect(self.start_recording)
+        window.record_released.connect(self.stop_recording)
+        mode_selected = getattr(window, "mode_selected", None)
+        if mode_selected is not None:
+            mode_selected.connect(self.set_mode)
 
     def start(self):
         self._load_model(config.MODEL_SIZE)
@@ -263,21 +265,41 @@ class VoiceController:
             except OSError:
                 logging.exception("activation key could not be saved")
                 self.window.set_hotkey_label(self._hotkey_name)
-                self.window.set_state("Could not save the activation key. Your previous key is still selected.")
+                self.window.set_state("Could not save the shortcut. Your previous key is still selected.")
                 return
             self._hotkey_name = name
             self._hotkey = key
             self._label = hotkey_label(name)
             self._hotkey_down = False
             self.window.set_hotkey_label(name)
-            self.window.set_state(f"Activation key set to [{self._label}].")
+            self.window.set_state(f"Shortcut set to {self._label}.")
+
+    def set_mode(self, mode: str):
+        """Hold the key while speaking, or press once to start and again to stop."""
+        toggle = mode == "toggle"
+        with self._state_lock:
+            if self._phase != "idle" or toggle == self._toggle:
+                self.window.set_mode(self._toggle)
+                return
+            try:
+                settings.set("activation_mode", mode)
+            except OSError:
+                logging.exception("activation mode could not be saved")
+                self.window.set_mode(self._toggle)
+                self.window.set_state("Could not save that choice. The previous one is still in use.")
+                return
+            self._toggle = toggle
+            with self._key_lock:
+                self._hotkey_down = False
+            self.window.set_mode(toggle)
+            self.window.set_state(self._ready_message())
 
     def start_hotkey_capture(self):
         with self._state_lock:
             if self._phase != "idle":
                 return
             self._capturing = True
-            self.window.set_state("Press the key you want to use to talk...", busy=False)
+            self.window.set_state("Press the key you want to use for dictation...", busy=False)
 
     def _load_model(self, model_size: str):
         # A model that is not on this computer yet is downloaded only after the
@@ -344,7 +366,7 @@ class VoiceController:
             return ("Your Mac is blocking the shortcut. Allow KeyStow under System Settings > "
                     "Privacy & Security > Accessibility, then quit and reopen KeyStow.")
         verb = "Press" if self._toggle else "Hold"
-        return f"Ready. {verb} [{self._label}] anywhere to speak."
+        return f"Ready. {verb} {self._label} anywhere to speak."
 
     @staticmethod
     def _silent(audio) -> bool:
@@ -481,9 +503,9 @@ class VoiceController:
                 if from_key and not self._toggle:
                     self._watch_release(self._capture_id)
                 if self._toggle:
-                    self.window.set_state(f"Listening... press [{self._label}] again to type.", recording=True)
+                    self.window.set_state(f"Listening... press {self._label} again to finish.", recording=True)
                 else:
-                    self.window.set_state("Listening... release to type.", recording=True)
+                    self.window.set_state("Listening... let go to finish.", recording=True)
             except Exception as exc:  # noqa: BLE001
                 self._phase = "idle"
                 self._discard_denoise(stream)
@@ -529,7 +551,7 @@ class VoiceController:
                     self._discard_denoise(stream)
                     hint = "Press" if self._toggle else "Hold"
                     self.window.set_state(
-                        f"Too short - nothing typed. {hint} [{self._label}] and speak.", busy=False)
+                        f"Too short, so nothing was typed. {hint} {self._label} and speak.", busy=False)
                     return
                 if self._silent(audio):
                     # Nothing was captured at all, so the model has nothing to
@@ -670,7 +692,7 @@ class VoiceController:
 
     def _outcome_message(self, outcome) -> str:
         verb = "Press" if self._toggle else "Hold"
-        again = f"{verb} [{self._label}] to speak again."
+        again = f"{verb} {self._label} to speak again."
         kind = getattr(outcome, "outcome", "requested")
         if kind == "confirmed":
             return f"Pasted. {again}"

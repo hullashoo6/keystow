@@ -88,7 +88,7 @@ class StorageStartupTest(unittest.TestCase):
                     w = ui.MainWindow()
                 assert paths.startup_storage_error() is None
                 assert not w.storage_warning.text()
-                assert 'today: 0' in w.stats_label.text()
+                assert '0 words today' in w.stats_label.text()
                 w.tray.hide()
             ''')
 

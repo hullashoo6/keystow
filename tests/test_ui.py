@@ -27,10 +27,26 @@ class UiStateTest(unittest.TestCase):
                     assert window.model_box.isEnabled() == (not (recording or busy))
                     assert window.hotkey_box.isEnabled() == (not (recording or busy))
                     assert window._hotkey_group.isEnabled() == (not (recording or busy))
+                    assert window.mode_box.isEnabled() == (not (recording or busy))
+                    # The state is named in words, never by colour alone.
+                    assert window.badge.text() == ("Listening" if recording else "Working" if busy else "Ready")
                 assert window.transcript.textInteractionFlags() & Qt.TextSelectableByMouse
+                for text, word in [("Pasted. Hold Right Ctrl to speak again.", "Pasted"),
+                                   ("You switched windows before the text was ready, so KeyStow did not paste it.", "Not pasted"),
+                                   ("Paste sent, but KeyStow could not confirm the app took it.", "Check the text"),
+                                   ("Your Mac is blocking the shortcut. Allow KeyStow under Accessibility.", "Needs permission")]:
+                    window.set_state(text)
+                    app.processEvents()
+                    assert window.badge.text() == word, (text, window.badge.text())
                 window.set_model_selection("base")
                 app.processEvents()
-                assert window.model_box.currentText() == "base"
+                assert window.model_box.currentText() == ui.MODEL_LABELS["base"]
+                window.set_mode(True)
+                app.processEvents()
+                assert window.mode_box.currentData() == "toggle" and window.record_btn.text() == "Click to talk"
+                window.set_mode(False)
+                app.processEvents()
+                assert window.record_btn.text() == "Hold to talk"
                 window.set_hotkey_label("shift_r")
                 app.processEvents()
                 assert window.hotkey_box.currentData() == "shift_r"

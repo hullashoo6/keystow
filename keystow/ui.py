@@ -8,6 +8,9 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QFrame,
+    QGridLayout,
+    QScrollArea,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -22,11 +25,18 @@ from PySide6.QtWidgets import (
 
 from . import __version__, autostart, config, paths, settings, stats, tray_icons
 
-ACCENT = "#6C5CE7"
-BG = "#1E1E2E"
-CARD = "#2A2A3C"
-TEXT = "#F5F5F7"
-MUTED = "#9C9CAF"
+# Palette and type from the website (docs/assets/site.css). Light only, as the
+# site is: it declares color-scheme: light.
+PAPER = "#ffffff"
+MIST = "#f5f5f7"
+INK = "#0d0d12"
+INK_HOVER = "#2b2b34"
+SLATE = "#5d5f69"     # 6.3:1 on white, 5.8:1 on mist
+LINE = "#e4e4ea"
+VIOLET = "#6f6cf2"    # accents, focus rings, outlines (about 4.1:1 on white: not for small text)
+VIOLET_INK = "#5b57e0"  # violet that carries text or sits under white text (about 5.4:1)
+ACCENT = VIOLET       # kept for the fallback icon
+FONT = '"Instrument Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
 
 if sys.platform == "darwin":
     # MacBook keyboards have no Right Ctrl; the first entry is the Mac default.
@@ -37,17 +47,26 @@ if sys.platform == "darwin":
         ("Right Control", "ctrl_r"),
     ]
 else:
+    # Caps Lock is no longer offered: every dictation toggled the Caps state.
+    # A key chosen earlier keeps working and shows under its own name.
     HOTKEY_PRESETS = [
         ("Right Ctrl", "ctrl_r"),
-        ("Caps Lock", "caps_lock"),
         ("Right Shift", "shift_r"),
         ("Right Alt", "alt_r"),
     ]
 CUSTOM_KEY = "__custom__"
 
-MODEL_CHOICES = ["tiny", "base", "small", "medium", "large-v3", "turbo"]
-MODEL_LABELS = {"turbo": "turbo - best accuracy"}
+MODEL_CHOICES = ["base", "tiny", "small", "medium", "turbo", "large-v3"]
+MODEL_LABELS = {
+    "base": "Base (built in)",
+    "tiny": "Tiny (fastest)",
+    "small": "Small",
+    "medium": "Medium",
+    "turbo": "Turbo (accurate, slower)",
+    "large-v3": "Large (slowest)",
+}
 _MODEL_NAME = {v: k for k, v in MODEL_LABELS.items()}
+MODE_CHOICES = [("Hold the key while you speak", "hold"), ("Press to start, press to stop", "toggle")]
 
 
 def hotkey_label(name: str) -> str:
@@ -56,131 +75,104 @@ def hotkey_label(name: str) -> str:
             return label
     return name.replace("_", " ").title()
 
+
 STYLESHEET = f"""
-QMainWindow, QWidget {{
-    background-color: {BG};
-    color: {TEXT};
-    font-family: "Segoe UI", "Inter", sans-serif;
+QMainWindow, QWidget#page {{
+    background-color: {PAPER};
 }}
-#card {{
-    background-color: {CARD};
-    border-radius: 14px;
+QWidget {{
+    color: {INK};
+    font-family: {FONT};
+    font-size: 14px;
 }}
-QLabel {{
-    background-color: transparent;
-}}
-QLabel#title {{
-    font-size: 18px;
+QLabel {{ background: transparent; }}
+QLabel#title {{ font-size: 22px; font-weight: 600; }}
+QLabel#version {{ color: {SLATE}; font-size: 12px; }}
+QLabel#badge {{
+    background-color: {PAPER};
+    border: 1px solid {LINE};
+    border-radius: 11px;
+    padding: 2px 10px;
+    font-size: 12px;
     font-weight: 600;
 }}
-QLabel#status {{
-    color: {MUTED};
-    font-size: 13px;
+QLabel#badge[state="listening"] {{ color: #ffffff; background-color: {VIOLET_INK}; border-color: {VIOLET_INK}; }}
+QLabel#badge[state="working"] {{ color: {VIOLET_INK}; border-color: {VIOLET}; }}
+QLabel#badge[state="attention"] {{ color: #8a1c1f; background-color: #fdecec; border-color: #f3c1c2; }}
+QLabel#badge[state="done"] {{ color: #1f6b3a; background-color: #e9f6ee; border-color: #bfe3cc; }}
+QLabel#status {{ color: {SLATE}; font-size: 14px; }}
+QLabel#hint, QLabel#stats, QLabel#small {{ color: {SLATE}; font-size: 12px; }}
+QLabel#sectionLabel {{ color: {SLATE}; font-size: 12px; font-weight: 600; }}
+QLabel#transcript {{ font-size: 16px; }}
+QFrame#panel {{
+    background-color: {MIST};
+    border: 1px solid {LINE};
+    border-radius: 16px;
 }}
-QLabel#transcript {{
-    font-size: 15px;
+QFrame#welcome {{
+    background-color: {PAPER};
+    border: 1px solid {VIOLET};
+    border-radius: 16px;
+}}
+QPushButton {{
+    font-family: {FONT};
 }}
 QPushButton#record {{
-    background-color: {ACCENT};
-    color: white;
+    background-color: {INK};
+    color: #ffffff;
     border: none;
-    border-radius: 32px;
+    border-radius: 28px;
     font-size: 16px;
     font-weight: 600;
+    padding: 0 28px;
 }}
-QPushButton#record:pressed {{
-    background-color: #5848c2;
-}}
-QPushButton#record:disabled {{
-    background-color: #44445a;
-    color: {MUTED};
-}}
-QPushButton#copy {{
-    background-color: transparent;
-    color: {TEXT};
-    border: 1px solid #3A3A4E;
-    border-radius: 8px;
+QPushButton#record:hover {{ background-color: {INK_HOVER}; }}
+QPushButton#record[listening="true"] {{ background-color: {VIOLET_INK}; }}
+QPushButton#record:focus {{ border: 3px solid {VIOLET}; }}
+QPushButton#record:disabled {{ background-color: {LINE}; color: {SLATE}; }}
+QPushButton#quiet {{
+    background-color: {PAPER};
+    color: {INK};
+    border: 1px solid {LINE};
+    border-radius: 16px;
     padding: 6px 16px;
+    font-weight: 600;
 }}
-QPushButton#copy:hover, QPushButton#copy:focus {{
-    border-color: {ACCENT};
-}}
-QPushButton#copy:disabled {{
-    color: {MUTED};
-    border-color: #343447;
-}}
+QPushButton#quiet:hover {{ border-color: {SLATE}; }}
+QPushButton#quiet:focus {{ border: 2px solid {VIOLET}; }}
+QPushButton#quiet:disabled {{ color: #a3a5ad; border-color: {LINE}; }}
 QComboBox {{
-    background-color: {CARD};
-    border: 1px solid #3A3A4E;
-    border-radius: 8px;
+    background-color: {PAPER};
+    border: 1px solid {LINE};
+    border-radius: 10px;
     padding: 6px 10px;
-    min-height: 18px;
-    color: {TEXT};
+    min-height: 20px;
 }}
-QComboBox:disabled {{
-    color: {MUTED};
-    border-color: #343447;
-    background-color: #252535;
-}}
-QCheckBox {{
-    background-color: transparent;
-}}
-QComboBox:hover {{
-    border-color: {ACCENT};
-}}
-QComboBox::drop-down {{
-    border: none;
-    width: 22px;
-}}
-QComboBox::down-arrow {{
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid {MUTED};
-    margin-right: 8px;
-}}
+QComboBox:hover {{ border-color: {SLATE}; }}
+QComboBox:focus {{ border: 2px solid {VIOLET}; }}
+QComboBox:disabled {{ color: #a3a5ad; background-color: {MIST}; }}
+QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox QAbstractItemView {{
-    background-color: {CARD};
-    color: {TEXT};
-    border: 1px solid #3A3A4E;
-    border-radius: 8px;
-    padding: 4px;
-    selection-background-color: {ACCENT};
-    selection-color: white;
+    background-color: {PAPER};
+    border: 1px solid {LINE};
+    selection-background-color: {MIST};
+    selection-color: {INK};
     outline: none;
 }}
+QCheckBox {{ background: transparent; spacing: 8px; }}
+QCheckBox:focus {{ color: {VIOLET_INK}; }}
 QMenu {{
-    background-color: {CARD};
-    color: {TEXT};
-    border: 1px solid #3A3A4E;
-    border-radius: 8px;
+    background-color: {PAPER};
+    border: 1px solid {LINE};
+    border-radius: 10px;
     padding: 6px;
 }}
-QMenu::item {{
-    padding: 6px 28px 6px 12px;
-    border-radius: 6px;
-}}
-QMenu::item:selected {{
-    background-color: {ACCENT};
-    color: white;
-}}
-QToolTip {{
-    background-color: {CARD};
-    color: {TEXT};
-    border: 1px solid #3A3A4E;
-    padding: 4px 8px;
-}}
-QProgressBar {{
-    background-color: {CARD};
-    border: none;
-    border-radius: 4px;
-    height: 8px;
-    text-align: center;
-}}
-QProgressBar::chunk {{
-    background-color: {ACCENT};
-    border-radius: 4px;
-}}
+QMenu::item {{ padding: 6px 28px 6px 12px; border-radius: 6px; }}
+QMenu::item:selected {{ background-color: {MIST}; }}
+QMenu::item:disabled {{ color: {SLATE}; }}
+QToolTip {{ background-color: {INK}; color: #ffffff; border: none; padding: 4px 8px; }}
+QProgressBar {{ background-color: {LINE}; border: none; border-radius: 2px; max-height: 4px; }}
+QProgressBar::chunk {{ background-color: {VIOLET}; border-radius: 2px; }}
 """
 
 
@@ -226,7 +218,9 @@ class MainWindow(QMainWindow):
     hotkey_selected = Signal(str)
     hotkey_capture_requested = Signal()
     copy_requested = Signal()
+    mode_selected = Signal(str)  # "hold" or "toggle"
     _sig_state = Signal(str, bool, bool)
+    _sig_mode = Signal(bool)
     _sig_transcript = Signal(str)
     _sig_stats = Signal()
     _sig_hotkey = Signal(str)
@@ -244,81 +238,135 @@ class MainWindow(QMainWindow):
         self._toggle = settings.toggle_mode()
         self._hotkey_name = settings.get("hotkey", config.HOTKEY)
         self._hotkey_label = hotkey_label(self._hotkey_name)
+        self._recording = False
 
+        page = QWidget()
+        page.setObjectName("page")
         card = QWidget()
-        card.setObjectName("card")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(24, 20, 24, 24)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
+        # Header: the website's mark and name.
+        header = QHBoxLayout()
+        header.setSpacing(10)
+        logo = QLabel()
+        logo.setPixmap(QPixmap.fromImage(tray_icons.render(64, "app")).scaled(
+            30, 30, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo.setAccessibleName("KeyStow logo")
+        header.addWidget(logo)
         title = QLabel("KeyStow")
         title.setObjectName("title")
-        layout.addWidget(title)
+        header.addWidget(title)
+        header.addStretch()
+        version = QLabel(f"v{__version__}")
+        version.setObjectName("version")
+        header.addWidget(version)
+        layout.addLayout(header)
 
-        self.status = QLabel("Loading the speech model. The base model is bundled with the installer.")
+        # Status: a badge naming the state in words, and what to do next.
+        status_panel = QFrame()
+        status_panel.setObjectName("panel")
+        status_box = QVBoxLayout(status_panel)
+        status_box.setContentsMargins(16, 12, 16, 14)
+        status_box.setSpacing(6)
+        badge_row = QHBoxLayout()
+        self.badge = QLabel("Loading")
+        self.badge.setObjectName("badge")
+        self.badge.setProperty("state", "working")
+        self.badge.setAccessibleName("KeyStow state")
+        badge_row.addWidget(self.badge)
+        badge_row.addStretch()
+        status_box.addLayout(badge_row)
+        self.status = QLabel("Loading the built-in speech model...")
         self.status.setObjectName("status")
         self.status.setWordWrap(True)
-        layout.addWidget(self.status)
-
+        self.status.setAccessibleName("Status")
+        status_box.addWidget(self.status)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0)
+        self.progress.setTextVisible(False)
+        self.progress.setAccessibleName("Working")
+        status_box.addWidget(self.progress)
         self.storage_warning = QLabel()
-        self.storage_warning.setObjectName("status")
+        self.storage_warning.setObjectName("small")
         self.storage_warning.setWordWrap(True)
         if paths.startup_storage_error() is not None:
             self.storage_warning.setText(
                 "Local storage could not be opened at startup. Settings and word counts "
-                "may not be saved. Check your .keystow path, then restart KeyStow."
+                "may not be saved. Check your .keystow folder, then restart KeyStow."
             )
-        if self.storage_warning.text():
-            self.storage_warning.setMinimumHeight(self.storage_warning.heightForWidth(280))
         self.storage_warning.setVisible(bool(self.storage_warning.text()))
-        layout.addWidget(self.storage_warning)
-
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 0)
-        layout.addWidget(self.progress)
-
-        self.record_btn = QPushButton()
-        self.record_btn.setObjectName("record")
-        self.record_btn.setMinimumHeight(64)
-        self.record_btn.setEnabled(False)
-        if self._toggle:
-            self.record_btn.setText("Click to talk")
-            self.record_btn.clicked.connect(self.record_toggled)
-        else:
-            self.record_btn.setText("Hold to talk")
-            self.record_btn.pressed.connect(self.record_pressed)
-            self.record_btn.released.connect(self.record_released)
-        layout.addWidget(self.record_btn)
-
-        self.hint = QLabel()
-        self.hint.setObjectName("status")
-        self.hint.setAlignment(Qt.AlignCenter)
-        self._update_hint()
-        layout.addWidget(self.hint)
-
+        status_box.addWidget(self.storage_warning)
         if sys.platform == "darwin":
             # macOS gives no global keys, paste or microphone audio to an app
             # until the user allows it, and shows no error when it is blocked.
             mac_note = QLabel(
-                "On a Mac, KeyStow needs your permission twice: Microphone, and Accessibility "
+                "KeyStow needs two permissions on a Mac: Microphone, and Accessibility "
                 "(for the shortcut and for pasting). Allow both under System Settings > "
                 "Privacy & Security, then quit and reopen KeyStow."
             )
-            mac_note.setObjectName("status")
+            mac_note.setObjectName("small")
             mac_note.setWordWrap(True)
-            layout.addWidget(mac_note)
+            status_box.addWidget(mac_note)
+        layout.addWidget(status_panel)
 
+        # The talk button. Hold it, or click once to start and again to stop
+        # (mode below); Space works the same way from the keyboard.
+        self.record_btn = QPushButton()
+        self.record_btn.setObjectName("record")
+        self.record_btn.setMinimumHeight(56)
+        self.record_btn.setEnabled(False)
+        self.record_btn.setAccessibleName("Talk")
+        self.record_btn.pressed.connect(self._record_pressed)
+        self.record_btn.released.connect(self._record_released)
+        self.record_btn.clicked.connect(self._record_clicked)
+        layout.addWidget(self.record_btn)
+        self.hint = QLabel()
+        self.hint.setObjectName("hint")
+        self.hint.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.hint)
+
+        # First run: one successful dictation without learning any settings.
+        self.welcome = QFrame()
+        self.welcome.setObjectName("welcome")
+        welcome_box = QVBoxLayout(self.welcome)
+        welcome_box.setContentsMargins(16, 12, 16, 12)
+        welcome_box.setSpacing(6)
+        welcome_title = QLabel("Try it now")
+        welcome_title.setObjectName("sectionLabel")
+        welcome_box.addWidget(welcome_title)
+        self.welcome_text = QLabel()
+        self.welcome_text.setWordWrap(True)
+        welcome_box.addWidget(self.welcome_text)
+        got_it = QPushButton("Got it")
+        got_it.setObjectName("quiet")
+        got_it.setAccessibleName("Hide the getting-started tip")
+        got_it.clicked.connect(lambda _checked=False: self._dismiss_welcome())
+        got_row = QHBoxLayout()
+        got_row.addStretch()
+        got_row.addWidget(got_it)
+        welcome_box.addLayout(got_row)
+        self.welcome.setVisible(not settings.get("welcome_done"))
+        layout.addWidget(self.welcome)
+
+        # Latest result, kept in memory only, with Copy for recovery.
+        result_panel = QFrame()
+        result_panel.setObjectName("panel")
+        result_box = QVBoxLayout(result_panel)
+        result_box.setContentsMargins(16, 12, 16, 12)
+        result_box.setSpacing(6)
+        result_label = QLabel("Latest dictation")
+        result_label.setObjectName("sectionLabel")
+        result_box.addWidget(result_label)
         self.transcript = QLabel("Your latest dictation appears here. KeyStow pastes it where your cursor is.")
         self.transcript.setObjectName("transcript")
         self.transcript.setWordWrap(True)
         self.transcript.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.transcript.setAccessibleName("Latest dictation")
-        layout.addWidget(self.transcript)
-
-        # Recovery: the latest dictation stays in memory (never on disk) so it
-        # can be copied when KeyStow could not or would not paste it.
+        result_box.addWidget(self.transcript)
         self.copy_btn = QPushButton("Copy")
-        self.copy_btn.setObjectName("copy")
+        self.copy_btn.setObjectName("quiet")
         self.copy_btn.setEnabled(False)
         self.copy_btn.setAccessibleName("Copy latest dictation")
         self.copy_btn.setToolTip("Put your latest dictation on the clipboard to paste it yourself.")
@@ -326,62 +374,86 @@ class MainWindow(QMainWindow):
         copy_row = QHBoxLayout()
         copy_row.addStretch()
         copy_row.addWidget(self.copy_btn)
-        layout.addLayout(copy_row)
+        result_box.addLayout(copy_row)
+        layout.addWidget(result_panel)
 
+        # Settings.
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(8)
+        self.hotkey_box = QComboBox()
+        for label, key_name in HOTKEY_PRESETS:
+            self.hotkey_box.addItem(label, key_name)
+        if self.hotkey_box.findData(self._hotkey_name) < 0:
+            # A key chosen earlier (including one no longer offered) stays shown.
+            self.hotkey_box.addItem(self._hotkey_label, self._hotkey_name)
+        self.hotkey_box.addItem("Choose another key...", CUSTOM_KEY)
+        self.hotkey_box.setCurrentIndex(max(0, self.hotkey_box.findData(self._hotkey_name)))
+        self.hotkey_box.setAccessibleName("Shortcut key")
+        self.hotkey_box.currentIndexChanged.connect(self._hotkey_combo_changed)
+        self.mode_box = QComboBox()
+        for label, mode in MODE_CHOICES:
+            self.mode_box.addItem(label, mode)
+        self.mode_box.setCurrentIndex(self.mode_box.findData("toggle" if self._toggle else "hold"))
+        self.mode_box.setAccessibleName("How the shortcut works")
+        self.mode_box.setToolTip("Press to start and stop suits anyone who finds holding a key hard.")
+        self.mode_box.currentIndexChanged.connect(self._mode_combo_changed)
+        self.model_box = QComboBox()
+        self.model_box.addItems([MODEL_LABELS.get(m, m) for m in MODEL_CHOICES])
+        self.model_box.setCurrentText(MODEL_LABELS.get(config.MODEL_SIZE, config.MODEL_SIZE))
+        self.model_box.setAccessibleName("Speech model")
+        self.model_box.setToolTip("Base is built in and works offline. Larger models download once, "
+                                  "after you agree, and are slower on most computers.")
+        for row, (text, widget) in enumerate((("Shortcut", self.hotkey_box), ("Mode", self.mode_box),
+                                              ("Model", self.model_box))):
+            label = QLabel(text)
+            label.setObjectName("sectionLabel")
+            label.setBuddy(widget)
+            grid.addWidget(label, row, 0)
+            grid.addWidget(widget, row, 1)
+        grid.setColumnStretch(1, 1)
+        layout.addLayout(grid)
+        self.noise_box = QCheckBox("Reduce background noise")
+        self._noise_saved = settings.get("noise_suppression", True)
+        self.noise_box.setChecked(self._noise_saved)
+        self.noise_box.setToolTip("Cleans fan and street noise out of the recording before it is "
+                                  "transcribed, on this computer.")
+        self.noise_box.toggled.connect(self._save_noise_preference)
+        layout.addWidget(self.noise_box)
         self.stats_label = QLabel()
         self.stats_label.setWordWrap(True)
-        self.stats_label.setObjectName("status")
+        self.stats_label.setObjectName("stats")
         self.stats_label.setAlignment(Qt.AlignCenter)
         self._do_refresh_stats()
         layout.addWidget(self.stats_label)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Model"))
-        self.model_box = QComboBox()
-        self.model_box.addItems([MODEL_LABELS.get(m, m) for m in MODEL_CHOICES])
-        self.model_box.setCurrentText(MODEL_LABELS.get(config.MODEL_SIZE, config.MODEL_SIZE))
-        self.model_box.setToolTip("'base' comes built in. 'turbo' is the accuracy pick - downloads once.")
-        row.addWidget(self.model_box)
-
-        row.addSpacing(12)
-        row.addWidget(QLabel("Key"))
-        self.hotkey_box = QComboBox()
-        for label, key_name in HOTKEY_PRESETS:
-            self.hotkey_box.addItem(label, key_name)
-        self.hotkey_box.addItem("Custom key...", CUSTOM_KEY)
-        idx = self.hotkey_box.findData(self._hotkey_name)
-        self.hotkey_box.setCurrentIndex(idx if idx >= 0 else 0)
-        self.hotkey_box.setToolTip("Press once to start, again to stop." if self._toggle
-                                   else "Hold this key to speak; release to stop and type.")
-        self.hotkey_box.currentIndexChanged.connect(self._hotkey_combo_changed)
-        row.addWidget(self.hotkey_box)
-        row.addStretch()
-        layout.addLayout(row)
-
-        opts = QHBoxLayout()
-        self.noise_box = QCheckBox("Suppress background noise (fans, hum)")
-        self._noise_saved = settings.get("noise_suppression", True)
-        self.noise_box.setChecked(self._noise_saved)
-        self.noise_box.setToolTip("Cleans up mic noise before transcribing. Leave on.")
-        self.noise_box.toggled.connect(self._save_noise_preference)
-        opts.addWidget(self.noise_box)
-        opts.addStretch()
-        layout.addLayout(opts)
-
-        wrapper = QWidget()
-        outer = QVBoxLayout(wrapper)
-        outer.setContentsMargins(16, 16, 16, 16)
-        # Keep the card centered and capped at a comfortable width when the
-        # window is maximized, instead of stretching edge to edge.
+        # Centred and capped in width, so it stays tidy when maximised.
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(12, 12, 12, 12)
         outer.addStretch()
         center_row = QHBoxLayout()
         center_row.addStretch()
-        card.setMaximumWidth(520)
-        center_row.addWidget(card)
+        card.setMaximumWidth(560)
+        card.setMinimumWidth(340)
+        center_row.addWidget(card, 1)
         center_row.addStretch()
         outer.addLayout(center_row)
         outer.addStretch()
-        self.setCentralWidget(wrapper)
+        # Scrolls rather than clips when the window is small or text is large.
+        scroller = QScrollArea()
+        scroller.setObjectName("page")
+        scroller.setFrameShape(QFrame.NoFrame)
+        scroller.setWidgetResizable(True)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroller.setWidget(page)
+        self.setCentralWidget(scroller)
+        self.setMinimumSize(360, 420)
+        self._card = card
+        # Start with focus on the page, not the talk button: the focus ring
+        # then appears only when someone moves through the window by keyboard.
+        page.setFocusPolicy(Qt.ClickFocus)
+        page.setFocus()
+        self._apply_mode()
 
         self.model_box.currentTextChanged.connect(self._model_changed)
         self._on_model_change = None
@@ -451,6 +523,7 @@ class MainWindow(QMainWindow):
         self._sig_stats.connect(self._do_refresh_stats)
         self._sig_hotkey.connect(self._do_set_hotkey_label)
         self._sig_model.connect(self._do_set_model_selection)
+        self._sig_mode.connect(self._do_set_mode)
 
     # --- hotkey selection ---
 
@@ -487,11 +560,14 @@ class MainWindow(QMainWindow):
         self._hotkey_name = name
         self._hotkey_label = hotkey_label(name)
         self._update_hint()
+        self.hotkey_box.blockSignals(True)
         idx = self.hotkey_box.findData(name)
-        if idx >= 0:
-            self.hotkey_box.blockSignals(True)
-            self.hotkey_box.setCurrentIndex(idx)
-            self.hotkey_box.blockSignals(False)
+        if idx < 0:
+            # A key captured with "Choose another key..." gets its own entry.
+            idx = self.hotkey_box.findData(CUSTOM_KEY)
+            self.hotkey_box.insertItem(idx, hotkey_label(name), name)
+        self.hotkey_box.setCurrentIndex(idx)
+        self.hotkey_box.blockSignals(False)
         for action in self._hotkey_group.actions():
             action.blockSignals(True)
         for action in self._hotkey_group.actions():
@@ -508,8 +584,91 @@ class MainWindow(QMainWindow):
         self.model_box.blockSignals(False)
 
     def _update_hint(self):
-        verb = "press" if self._toggle else "hold"
-        self.hint.setText(f"or {verb} [{self._hotkey_label}] anywhere")
+        key = self._hotkey_label
+        if self._toggle:
+            self.hint.setText(f"or press {key} anywhere to start, and again to stop")
+            self.welcome_text.setText(
+                f"1. Click into any text box, such as Notepad or an email.\n"
+                f"2. Press {key} once and say a sentence.\n"
+                f"3. Press {key} again. Your words appear where the cursor is.")
+        else:
+            self.hint.setText(f"or hold {key} anywhere while you speak")
+            self.welcome_text.setText(
+                f"1. Click into any text box, such as Notepad or an email.\n"
+                f"2. Hold {key} and say a sentence.\n"
+                f"3. Let go. Your words appear where the cursor is.")
+
+    # --- talk button and mode ---
+
+    def _apply_mode(self):
+        self.record_btn.setText(self._button_text())
+        self._update_hint()
+
+    def _button_text(self) -> str:
+        if self._recording:
+            return "Stop" if self._toggle else "Release to finish"
+        return "Click to talk" if self._toggle else "Hold to talk"
+
+    def _record_pressed(self):
+        if not self._toggle:
+            self.record_pressed.emit()
+
+    def _record_released(self):
+        if not self._toggle:
+            self.record_released.emit()
+
+    def _record_clicked(self, _checked=False):
+        if self._toggle:
+            self.record_toggled.emit()
+
+    def _mode_combo_changed(self, index):
+        mode = self.mode_box.itemData(index)
+        if mode in ("hold", "toggle"):
+            self.mode_selected.emit(mode)
+
+    def set_mode(self, toggle: bool):
+        """The controller confirmed (and saved) a mode; may come from any thread."""
+        self._sig_mode.emit(bool(toggle))
+
+    def _do_set_mode(self, toggle: bool):
+        self._toggle = toggle
+        self.mode_box.blockSignals(True)
+        self.mode_box.setCurrentIndex(self.mode_box.findData("toggle" if toggle else "hold"))
+        self.mode_box.blockSignals(False)
+        self._apply_mode()
+
+    def _dismiss_welcome(self):
+        self.welcome.hide()
+        try:
+            settings.set("welcome_done", True)
+        except OSError:
+            pass  # shown again next start; harmless
+
+    @staticmethod
+    def _state_kind(text: str, recording: bool, busy: bool):
+        """A word and a style for the badge, so state never relies on colour alone."""
+        if recording:
+            return "Listening", "listening"
+        if busy:
+            return ("Loading" if "model" in text.lower() else "Working"), "working"
+        lowered = text.lower()
+        if text.startswith("Pasted"):
+            return "Pasted", "done"
+        if text.startswith("Copied"):
+            return "Copied", "done"
+        if any(w in lowered for w in ("accessibility", "allowed to use it", "blocking the shortcut",
+                                      "keyboard layout")):
+            return "Needs permission" if "layout" not in lowered else "Shortcut off", "attention"
+        if "could not confirm" in lowered:
+            return "Check the text", "attention"
+        if any(w in lowered for w in ("did not paste", "click copy", "nothing was pasted",
+                                      "blocks keystow", "blocked the paste")):
+            return "Not pasted", "attention"
+        if any(w in lowered for w in ("failed", "couldn't", "could not", "error", "no sound", "missing")):
+            return "Problem", "attention"
+        if lowered.startswith("too short") or lowered.startswith("didn't catch"):
+            return "Nothing heard", "attention"
+        return "Ready", ""
 
     # --- tray & window plumbing ---
 
@@ -561,22 +720,61 @@ class MainWindow(QMainWindow):
     def set_state(self, text: str, recording: bool = False, busy: bool = False):
         self._sig_state.emit(text, recording, busy)
 
+    def _fit(self):
+        """Give the card the height its wrapped text needs at the current width.
+
+        Qt's main-window layout does not pass height-for-width through, so
+        two-line messages were squeezed into one line at narrow widths.
+        """
+        card = getattr(self, "_card", None)
+        if card is not None and card.layout() is not None:
+            card.setMinimumHeight(card.layout().heightForWidth(max(card.width(), 1)))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self._fit)
+
+    @staticmethod
+    def _restyle(widget, name: str, value: str):
+        """Change a style property and make Qt apply the matching rules."""
+        if widget.property(name) != value:
+            widget.setProperty(name, value)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
+    def _announce(self, message: str):
+        """Tell screen readers about the new state without moving focus."""
+        self.status.setAccessibleDescription(message)
+        try:
+            from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent
+
+            QAccessible.updateAccessibility(QAccessibleAnnouncementEvent(self.status, message))
+        except Exception:  # noqa: BLE001 - older Qt: the description change still helps
+            pass
+
     def _do_set_state(self, text: str, recording: bool, busy: bool):
         self.status.setText(text)
-        if recording:
-            self.record_btn.setText("Stop and type" if self._toggle else "Release to type")
-        else:
-            self.record_btn.setText("Click to talk" if self._toggle else "Hold to talk")
+        word, kind = self._state_kind(text, recording, busy)
+        self.badge.setText(word)
+        self._restyle(self.badge, "state", kind)
+        self._recording = recording
+        self._restyle(self.record_btn, "listening", "true" if recording else "false")
+        self.record_btn.setText(self._button_text())
         self.record_btn.setEnabled(not busy)
+        self._announce(f"{word}. {text}")
+        if word == "Pasted" and not self.welcome.isHidden():
+            self._dismiss_welcome()  # the first dictation worked; the tip has done its job
         editable = not (busy or recording)
         self.model_box.setEnabled(editable)
         self.hotkey_box.setEnabled(editable)
+        self.mode_box.setEnabled(editable)
         self.noise_box.setEnabled(editable)
         self._hotkey_group.setEnabled(editable)
         self._custom_key_action.setEnabled(editable)
         self.progress.setVisible(busy)
         self.tray.setIcon(self._icon_listening if recording else self._icon_idle)
         self.tray.setToolTip(f"KeyStow - {'listening...' if recording else text}")
+        QTimer.singleShot(0, self._fit)
 
     # Approximate download sizes of the optional faster-whisper models.
     MODEL_DOWNLOAD_SIZES = {"tiny": "75 MB", "small": "480 MB", "medium": "1.5 GB",
@@ -600,6 +798,7 @@ class MainWindow(QMainWindow):
         self.transcript.setText(text)
         self.copy_btn.setEnabled(bool(text))
         self.copy_action.setEnabled(bool(text))
+        QTimer.singleShot(0, self._fit)
 
     def refresh_stats(self):
         self._sig_stats.emit()
@@ -608,9 +807,21 @@ class MainWindow(QMainWindow):
         if paths.startup_storage_error() is not None:
             self.stats_label.setText("Word counts unavailable.")
             return
-        self.stats_label.setText(
-            f"Words dictated - today: {stats.today():,}  |  all time: {stats.total():,}"
-        )
+        self.stats_label.setText(f"{stats.today():,} words today  ·  {stats.total():,} all time")
+
+
+def _load_brand_font() -> bool:
+    """Load Instrument Sans (SIL OFL 1.1, shipped with its licence in fonts/).
+
+    If it cannot be loaded, the stylesheet falls back to Segoe UI / the
+    system font, as the website does.
+    """
+    import os
+
+    from PySide6.QtGui import QFontDatabase
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "InstrumentSans-Variable.ttf")
+    return os.path.isfile(path) and QFontDatabase.addApplicationFont(path) >= 0
 
 
 def run_app(controller_factory):
@@ -618,6 +829,7 @@ def run_app(controller_factory):
     import sys
 
     app = QApplication(sys.argv)
+    _load_brand_font()
     app.setQuitOnLastWindowClosed(False)  # request_quit owns safe worker cleanup
     from .single_instance import InstanceGuard
     guard = InstanceGuard()

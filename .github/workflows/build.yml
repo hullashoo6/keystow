@@ -108,10 +108,10 @@ jobs:
       # at every start and left it behind after an unclean exit.
       - name: Build the KeyStow folder with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name KeyStow --icon installer\keystow.ico --version-file build-version-info.txt --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer\keystow.ico --version-file build-version-info.txt --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --add-data "keystow/fonts;keystow/fonts" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
       - name: Check the folder has the app, its version, the speech model, the noise library and the licences
         run: |
-          foreach ($path in 'dist\KeyStow\KeyStow.exe', 'dist\KeyStow\_internal\models\faster-whisper-base\model.bin', 'dist\KeyStow\_internal\keystow\vendor\rnnoise.dll', 'build-licenses\THIRD-PARTY-NOTICES.txt', 'build-licenses\LICENSE.txt', 'build-licenses\texts\GPL-3.0.txt') {
+          foreach ($path in 'dist\KeyStow\KeyStow.exe', 'dist\KeyStow\_internal\models\faster-whisper-base\model.bin', 'dist\KeyStow\_internal\keystow\vendor\rnnoise.dll', 'dist\KeyStow\_internal\keystow\fonts\InstrumentSans-Variable.ttf', 'dist\KeyStow\_internal\keystow\fonts\OFL.txt', 'build-licenses\THIRD-PARTY-NOTICES.txt', 'build-licenses\LICENSE.txt', 'build-licenses\texts\GPL-3.0.txt') {
             if (-not (Test-Path $path)) { throw "Missing from the build: $path" }
           }
           $reported = (Get-Item dist\KeyStow\KeyStow.exe).VersionInfo.ProductVersion
@@ -176,7 +176,7 @@ jobs:
       # unpacks itself into the temp folder at every start.
       - name: Build KeyStow.app with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --add-data 'build-licenses:licenses' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --add-data 'build-licenses:licenses' --add-data 'keystow/fonts:keystow/fonts' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
           test -x dist/KeyStow.app/Contents/MacOS/KeyStow
           test -n "$(find dist/KeyStow.app -type f -path '*models/faster-whisper-base/model.bin' -print -quit)"
           test -n "$(find dist/KeyStow.app -type f -path '*licenses/THIRD-PARTY-NOTICES.txt' -print -quit)"

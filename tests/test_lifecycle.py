@@ -546,8 +546,11 @@ class LifecycleTest(unittest.TestCase):
         with self.c._key_lock:
             self.c._hotkey_down = True  # ...but the release event never arrived
         self.c._start_from_key()
-        deadline = time.monotonic() + 2
-        while self.c._phase == 'recording' and time.monotonic() < deadline:
+        # Wait for the watchdog's stop to hand over to the worker: the phase
+        # leaves "recording" a moment before the worker thread exists.
+        deadline = time.monotonic() + 3
+        while (self.c._phase == 'recording' or getattr(self.c, '_worker', None) is None) \
+                and time.monotonic() < deadline:
             time.sleep(0.02)
         self.assertNotEqual(self.c._phase, 'recording')
         self.finish()

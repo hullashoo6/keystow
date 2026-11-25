@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>How to Set Up KeyStow on Windows or Mac</title>
-<meta name="description" content="How to set up KeyStow offline voice dictation on Windows or Mac: download, install, grant microphone permission, pick your shortcut key.">
+<meta name="description" content="How to set up KeyStow offline voice dictation on Windows or Mac: download, install, allow the microphone (and Accessibility on a Mac), learn your shortcut.">
 <link rel="canonical" href="https://hullashoo6.github.io/keystow/blog/keystow-setup-guide/">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="KeyStow">
 <meta property="og:title" content="How to Set Up KeyStow on Windows or Mac">
-<meta property="og:description" content="How to set up KeyStow offline voice dictation on Windows or Mac: download, install, grant microphone permission, pick your shortcut key.">
+<meta property="og:description" content="How to set up KeyStow offline voice dictation on Windows or Mac: download, install, allow the microphone (and Accessibility on a Mac), learn your shortcut.">
 <meta property="og:url" content="https://hullashoo6.github.io/keystow/blog/keystow-setup-guide/">
 <meta property="og:image" content="https://hullashoo6.github.io/keystow/assets/og.png">
 <meta property="article:published_time" content="2026-11-24">
@@ -18,9 +18,9 @@
 <link rel="icon" type="image/png" href="../../assets/favicon.png">
 <link rel="icon" type="image/svg+xml" href="../../assets/logo.svg">
 <link rel="preload" href="../../assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../assets/site.css?v=3">
+<link rel="stylesheet" href="../../assets/site.css?v=4">
 <link rel="stylesheet" href="../../assets/blog.css?v=3">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"How to Set Up KeyStow on Windows or Mac","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"publisher":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"mainEntityOfPage":"https://hullashoo6.github.io/keystow/blog/keystow-setup-guide/","image":"https://hullashoo6.github.io/keystow/assets/og.png","description":"How to set up KeyStow offline voice dictation on Windows or Mac: download, install, grant microphone permission, pick your shortcut key.","inLanguage":"en"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"How to Set Up KeyStow on Windows or Mac","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"publisher":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"mainEntityOfPage":"https://hullashoo6.github.io/keystow/blog/keystow-setup-guide/","image":"https://hullashoo6.github.io/keystow/assets/og.png","description":"How to set up KeyStow offline voice dictation on Windows or Mac: download, install, allow the microphone (and Accessibility on a Mac), learn your shortcut.","inLanguage":"en"}</script>
 </head>
 <body>
 <div class="wrap">
@@ -42,22 +42,25 @@
 
 <div class="article-body">
 <h2>What you need</h2>
-<ul><li>A Windows PC or an Apple Silicon Mac.</li><li>One download.</li><li>Five dollars, once. No account, no subscription.</li></ul>
-<h2>Step 1: Download and install</h2>
-<p>Go to <strong>hullashoo6.github.io/keystow</strong> and download the installer for your computer, then run it. The app bundles its Whisper speech model, so there is no second download or separate setup for the speech engine.</p>
-<h2>Step 2: Grant microphone access</h2>
-<p>Your operating system will ask for permission to use the microphone. Grant it; the app cannot hear your speech without it. KeyStow processes your voice privately on your own computer and never sends it to the cloud, so this permission stays local.</p>
-<h2>Step 3: Start it and check it is running</h2>
-<p>KeyStow runs quietly in the background and can start automatically when you sign in, so it is always there when you need it. Closing its window does not stop it; it keeps listening for your shortcut. To actually exit, quit it explicitly.</p>
-<h2>Step 4: Learn the one shortcut</h2>
-<p>The default hold-to-talk key is <strong>Right Option</strong> on Mac (with a Windows equivalent). Hold it, talk, release: the words type wherever your cursor is. If the default clashes with your habits, open KeyStow&#x27;s settings and pick a different key. Hold-to-talk also means you dictate exactly when you choose; nothing listens in between.</p>
-<h2>Step 5: Test it once</h2>
-<p>1. Open any text field: Notes, Notepad, your email draft.</p>
-<p>2. Hold your shortcut key and say a short sentence.</p>
-<p>3. Release. Your sentence should appear.</p>
-<p>If it does, you are done setting up. Use it everywhere from now on: email, docs, chat, forms.</p>
-<h2>What you do NOT have to do</h2>
-<ul><li>Create an account or sign in.</li><li>Enter payment details again. $5 once, lifetime.</li><li>Worry about your recordings. KeyStow keeps no audio recording or transcript history.</li><li>Stay online. Dictation works without internet.</li></ul>
+<ul><li>A 64-bit Windows 10 or 11 PC, or an Apple Silicon Mac with macOS 14 or later.</li><li>A microphone (the built-in one is fine).</li><li>Five dollars, once. No account, no subscription.</li></ul>
+<h2>Step 1: Buy, download and install</h2>
+<p>Buy KeyStow on <strong>hullashoo6.github.io/keystow</strong>. After payment you get the download links for both installers. On Windows, run <strong>KeyStowSetup.exe</strong>. On a Mac, open <strong>KeyStowMac.dmg</strong> and drag KeyStow into Applications. The base speech model is inside the app, so there is no second download.</p>
+<p>The installers are not signed with a paid certificate, so Windows and macOS each ask you to confirm KeyStow the first time; follow the steps that come with your download.</p>
+<h2>Step 2: Allow the microphone (and, on a Mac, Accessibility)</h2>
+<p><strong>Windows:</strong> there is no pop-up. If nothing is heard, open Settings &gt; Privacy &amp; security &gt; Microphone and make sure microphone access and <em>Let desktop apps access your microphone</em> are on.</p>
+<p><strong>Mac:</strong> KeyStow needs two permissions under System Settings &gt; Privacy &amp; Security. <em>Microphone</em>: macOS asks the first time you dictate. <em>Accessibility</em>, for the shortcut and for pasting: KeyStow asks when it starts; switch it on, then quit and reopen KeyStow.</p>
+<p>Your voice is processed privately on your own computer and never sent to the cloud. Dictation works without internet too.</p>
+<h2>Step 3: Learn the one shortcut</h2>
+<p>Hold <strong>Right Ctrl</strong> on Windows, or <strong>Right Option</strong> on a Mac, speak, and let go. KeyStow turns your speech into text and pastes it where your cursor is. You can pick a different key in the KeyStow window or from its tray (menu bar) icon. Nothing listens until you hold the key.</p>
+<h2>Step 4: Test it once</h2>
+<p>1. Click into any text box: Notepad, TextEdit, an email draft.</p>
+<p>2. Hold your shortcut and say a short sentence.</p>
+<p>3. Let go. Your sentence appears at the cursor.</p>
+<p>If it does, you are set. Read what you dictated before you send it: speech recognition can be wrong.</p>
+<h2>Keeping it running</h2>
+<p>KeyStow starts when you sign in (you can switch that off from its tray or menu bar icon). <strong>Closing the KeyStow window quits it.</strong> Minimise the window instead to keep dictation available.</p>
+<h2>What you do not have to do</h2>
+<ul><li>Create an account or sign in.</li><li>Pay again. $5 once, lifetime access including updates.</li><li>Worry about your recordings. KeyStow keeps no audio recording or transcript history.</li><li>Stay online. Dictation works without internet.</li></ul>
 
 <div class="article-cta">
 <p>KeyStow: offline voice dictation for Windows and Apple Silicon Mac. $5 once, lifetime access.</p>

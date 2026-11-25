@@ -18,7 +18,7 @@
 <link rel="icon" type="image/png" href="../../assets/favicon.png">
 <link rel="icon" type="image/svg+xml" href="../../assets/logo.svg">
 <link rel="preload" href="../../assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../assets/site.css?v=3">
+<link rel="stylesheet" href="../../assets/site.css?v=4">
 <link rel="stylesheet" href="../../assets/blog.css?v=3">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"How KeyStow Works: Local Whisper Models, Hold-to-Talk, and the Word Dashboard","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"publisher":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"mainEntityOfPage":"https://hullashoo6.github.io/keystow/blog/keystow-app/","image":"https://hullashoo6.github.io/keystow/assets/og.png","description":"KeyStow is an offline voice dictation application for Windows and Mac.","inLanguage":"en"}</script>
 </head>
@@ -42,12 +42,12 @@
 
 <div class="article-body">
 <p>KeyStow is an offline voice dictation application for Windows and Mac. This post walks through what it actually does when you press the key, and what you can adjust. No marketing claims, just how it works.</p>
-<h2>Hold to talk, release to type</h2>
-<p>The whole flow is one key. Put your cursor in any text field, hold your activation key, speak, and release. While you hold, KeyStow listens through your microphone. When you release, it transcribes what you said and types the text where your cursor is, in whatever app you are using.</p>
-<p>The default key is Right Ctrl on Windows and Right Option on Mac (MacBook keyboards have no Right Ctrl). You can change it to Caps Lock, Right Shift, Right Alt or a custom key in the settings.</p>
+<h2>Hold to talk, release to paste</h2>
+<p>The whole flow is one key. Put your cursor in any text field, hold your activation key, speak, and release. While you hold, KeyStow listens through your microphone. When you release, it transcribes what you said and pastes the text where your cursor is, in whatever app you are using.</p>
+<p>The default key is Right Ctrl on Windows and Right Option on Mac (MacBook keyboards have no Right Ctrl). You can change it to Right Shift, Right Alt or another key in the settings.</p>
 <h2>Transcription happens on your computer</h2>
 <p>KeyStow runs OpenAI&#x27;s Whisper speech recognition models locally. Nothing is sent to a transcription service: your voice is processed privately on your own computer and never sent to the cloud. That also means dictation works with no internet connection at all, after installation.</p>
-<p>You can pick from several Whisper model sizes. Smaller models transcribe faster and use fewer resources; larger models are more accurate, especially with accents, names and uncommon words. You can switch sizes in the settings and see which trade-off fits your machine and your voice. Microphone input passes through noise suppression before transcription, so a fan or street noise matters less.</p>
+<p>You can pick from several Whisper model sizes. Smaller models transcribe faster and use fewer resources; larger models are more accurate, especially with accents, names and uncommon words. You can switch sizes in the settings and see which trade-off fits your machine and your voice. On Windows, microphone input passes through noise suppression before transcription, so a fan or street noise matters less. The Mac app does not include noise suppression yet.</p>
 <h2>Always there, never in the way</h2>
 <p>KeyStow lives in the system tray (menu bar on Mac). It starts automatically when you sign in, so you never have to remember to launch it before dictating. Closing the window quits the app fully; it does not hide in the background.</p>
 <h2>What KeyStow keeps, and what it does not</h2>

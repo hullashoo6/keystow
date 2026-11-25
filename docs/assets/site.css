@@ -134,7 +134,10 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--violet);outline-offs
 /* Narrow screens */
 @media (max-width:900px){
   .wrap{width:min(1180px,100% - 44px)}
+  .nav{gap:18px}
+  /* Section links are for the long home page; Blog must stay reachable on phones. */
   .nav-link{display:none}
+  .nav-link[href$="blog/"]{display:inline}
   .hero{grid-template-columns:minmax(0,1fr);gap:48px;padding:24px 0 72px}
   .sheet{min-height:300px}
   .sheet-page{padding:32px 26px 26px}

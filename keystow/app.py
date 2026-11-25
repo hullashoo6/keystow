@@ -793,6 +793,19 @@ class VoiceController:
                     self.window.set_state(result, busy=False)
 
 
+def _read_wav(path: str):
+    """A 16 kHz mono 16-bit WAV as float samples (no audio-file library needed)."""
+    import wave
+
+    import numpy as np
+
+    with wave.open(path, "rb") as wav:
+        if (wav.getframerate(), wav.getnchannels(), wav.getsampwidth()) != (config.SAMPLE_RATE, 1, 2):
+            raise ValueError("the self-test sample must be 16 kHz mono 16-bit WAV")
+        raw = wav.readframes(wav.getnframes())
+    return np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+
+
 def _self_test(arguments) -> int:
     """Release-build check of the packaged app: load the shipped model, run it.
 
@@ -828,9 +841,7 @@ def _self_test(arguments) -> int:
             raise RuntimeError("the noise-suppression library did not load")
         for argument in arguments:
             if argument.startswith("--self-test-audio="):
-                from faster_whisper import decode_audio
-
-                speech = decode_audio(argument.split("=", 1)[1], sampling_rate=config.SAMPLE_RATE)
+                speech = _read_wav(argument.split("=", 1)[1])
                 report["speech_text"] = model.transcribe(speech)
                 if not report["speech_text"]:
                     raise RuntimeError("the speech sample produced no text")

@@ -27,9 +27,11 @@ ROOT = HERE.parent
 
 # Used to make or check the installers; not put inside them.
 BUILD_ONLY = {'pip', 'setuptools', 'wheel', 'pyinstaller', 'pyinstaller-hooks-contrib',
-              'altgraph', 'macholib', 'pefile', 'pywin32-ctypes'}
+              'altgraph', 'macholib', 'pefile', 'pywin32-ctypes', 'pillow', 'psutil'}
 # If one of these is missing the script is not running in the build environment.
-EXPECTED = {'pyside6', 'pynput', 'faster-whisper', 'ctranslate2', 'numpy', 'av',
+# PyAV ("av") is removed before the build (installer/stubs/av replaces it), and
+# Qt comes from PySide6-Essentials only.
+EXPECTED = {'pyside6-essentials', 'pynput', 'faster-whisper', 'ctranslate2', 'numpy',
             'onnxruntime', 'sounddevice', 'pyperclip', 'tokenizers', 'huggingface-hub'}
 LICENCE_FILE = re.compile(r'(licen[cs]e|copying|notice|authors|copyright)', re.IGNORECASE)
 

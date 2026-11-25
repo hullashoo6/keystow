@@ -88,6 +88,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
+      # KeyStow never decodes audio files, so PyAV (FFmpeg, with the GPL x264
+      # and x265 encoders, about 77 MB) is replaced by installer/stubs/av.
+      - name: Remove PyAV from the build environment
+        run: python -m pip uninstall -y av
       - name: Generate app icons
         run: python installer/make_icons.py
       - name: Gather third-party licences and write the version details for KeyStow.exe
@@ -106,7 +110,14 @@ jobs:
       # at every start and left it behind after an unclean exit.
       - name: Build the KeyStow folder with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name KeyStow --icon installer\keystow.ico --version-file build-version-info.txt --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --add-data "keystow/fonts;keystow/fonts" --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer\keystow.ico --version-file build-version-info.txt --add-data "models/faster-whisper-base;models/faster-whisper-base" --add-binary "keystow/vendor/rnnoise.dll;keystow/vendor" --add-data "keystow/fonts;keystow/fonts" --paths installer\stubs --additional-hooks-dir installer\hooks --exclude-module PIL --exclude-module hf_xet --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          # Qt's software OpenGL renderer (about 20 MB): KeyStow's window is plain
+          # widgets and never creates an OpenGL context.
+          Remove-Item dist\KeyStow\_internal\PySide6\opengl32sw.dll -ErrorAction SilentlyContinue
+          # Nothing from FFmpeg may ship, and pynput must be replaceable source.
+          $ffmpeg = Get-ChildItem dist\KeyStow -Recurse -File | Where-Object { $_.Name -match '^(avcodec|avformat|avutil|swresample|swscale|libx26[45]|av\.libs)' }
+          if ($ffmpeg) { throw "FFmpeg libraries in the build: $($ffmpeg.Name -join ', ')" }
+          if (-not (Test-Path dist\KeyStow\_internal\pynput\__init__.py)) { throw "pynput is not shipped as source" }
       - name: Check the folder has the app, its version, the speech model, the noise library and the licences
         run: |
           foreach ($path in 'dist\KeyStow\KeyStow.exe', 'dist\KeyStow\_internal\models\faster-whisper-base\model.bin', 'dist\KeyStow\_internal\keystow\vendor\rnnoise.dll', 'dist\KeyStow\_internal\keystow\fonts\InstrumentSans-Variable.ttf', 'dist\KeyStow\_internal\keystow\fonts\OFL.txt', 'build-licenses\THIRD-PARTY-NOTICES.txt', 'build-licenses\LICENSE.txt', 'build-licenses\texts\GPL-3.0.txt') {
@@ -165,6 +176,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
+      - name: Remove PyAV from the build environment (replaced by installer/stubs/av)
+        run: python -m pip uninstall -y av
       - name: Generate app icon, gather third-party licences and fetch the bundled speech model at its pinned revision
         run: |
           python installer/make_icons.py
@@ -174,8 +187,13 @@ jobs:
       # unpacks itself into the temp folder at every start.
       - name: Build KeyStow.app with PyInstaller
         run: |
-          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --add-data 'build-licenses:licenses' --add-data 'keystow/fonts:keystow/fonts' --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --add-data 'build-licenses:licenses' --add-data 'keystow/fonts:keystow/fonts' --paths installer/stubs --additional-hooks-dir installer/hooks --exclude-module PIL --exclude-module hf_xet --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
           test -x dist/KeyStow.app/Contents/MacOS/KeyStow
+          # Nothing from FFmpeg may ship, and pynput must be replaceable source.
+          if find dist/KeyStow.app -type f \( -name 'libavcodec*' -o -name 'libavformat*' -o -name 'libx264*' -o -name 'libx265*' \) | grep -q .; then
+            echo "FFmpeg libraries in the build"; exit 1
+          fi
+          test -n "$(find dist/KeyStow.app -type f -path '*pynput/__init__.py' -print -quit)"
           test -n "$(find dist/KeyStow.app -type f -path '*models/faster-whisper-base/model.bin' -print -quit)"
           test -n "$(find dist/KeyStow.app -type f -path '*licenses/THIRD-PARTY-NOTICES.txt' -print -quit)"
       # macOS gives an app no microphone audio, and shows no permission prompt,

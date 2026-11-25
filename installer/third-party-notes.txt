@@ -30,22 +30,18 @@ Instrument Sans (the typeface of the KeyStow window and website)
 
 pynput
     Licence: GNU Lesser General Public License v3 (texts/LGPL-3.0.txt).
-    Unmodified, from PyPI.
+    Unmodified, from PyPI. Shipped as plain Python source files in the
+    app's pynput folder, so it can be replaced with a modified version.
     Source:  https://github.com/moses-palmer/pynput
 
-FFmpeg libraries, with x264 and x265
-    These arrive inside the PyAV ("av") package, which the speech library
-    depends on. KeyStow does not use the video encoders.
-    Licence: FFmpeg is under the GNU Lesser General Public License v2.1 or
-             later; a build that includes x264 and x265 is under the GNU
-             General Public License (texts/LGPL-2.1.txt, texts/GPL-2.0.txt,
-             texts/GPL-3.0.txt). The same package carries other codec
-             libraries, each under its own licence.
-    Source:  https://github.com/PyAV-Org/pyav-ffmpeg (sources and build
-             scripts for these binaries)
-             https://ffmpeg.org/
-             https://code.videolan.org/videolan/x264
-             https://bitbucket.org/multicoreware/x265_git
+No FFmpeg (from v1.0.7)
+    The speech library imports PyAV only to decode audio files, which
+    KeyStow never does: it passes microphone samples. Installers from
+    v1.0.7 contain a small stand-in module (KeyStow's own code, MIT) in
+    place of PyAV, so no FFmpeg, x264 or x265 library is included.
+    Installers up to v1.0.6 did contain them: FFmpeg under the GNU LGPL
+    v2.1 or later, built with x264 and x265 under the GNU GPL; sources at
+    https://github.com/PyAV-Org/pyav-ffmpeg and https://ffmpeg.org/.
 
 Whisper "base" speech model
     Licence: MIT. Model by OpenAI, converted for CTranslate2 by SYSTRAN.

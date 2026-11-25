@@ -257,6 +257,8 @@ jobs:
           mkdir -p dist/dmg
           ditto dist/KeyStow.app dist/dmg/KeyStow.app
           ln -s /Applications dist/dmg/Applications
+          # The one-time first-launch steps live in the disk image, not on the website.
+          cp "installer/mac/Open KeyStow the first time.txt" dist/dmg/
           codesign --verify --deep --strict dist/dmg/KeyStow.app
           hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
           hdiutil verify dist/KeyStowMac.dmg 2>&1 | tee release-evidence/dmg-verify.txt

@@ -53,8 +53,17 @@ jobs:
           lipo -archs "$PY" | tee /dev/stderr | grep -q arm64
           "$PY" -m venv venv
           venv/bin/python -m pip install --upgrade pip delocate packaging
-      - name: Mac constraints (onnxruntime 1.23.2, the last release with Intel wheels)
-        run: sed -E 's/^onnxruntime==.*/onnxruntime==1.23.2/' installer/constraints.txt > constraints-mac.txt
+      # Two Mac-only pins, both found by reading the binaries:
+      # - onnxruntime 1.23.2: the newest release with Intel Mac wheels.
+      # - PySide6 6.9.3: 6.12.0 is labelled macOS 14 but its compiled bindings
+      #   require macOS 26 (6.10/6.11 require 15); 6.9.3's truly need only 12.
+      #   The audit step below fails the build if this ever slips again.
+      - name: Mac constraints
+        run: |
+          sed -E -e 's/^onnxruntime==.*/onnxruntime==1.23.2/' \
+                 -e 's/^PySide6_Essentials==.*/PySide6_Essentials==6.9.3/' \
+                 -e 's/^shiboken6==.*/shiboken6==6.9.3/' installer/constraints.txt > constraints-mac.txt
+          grep -E '^(onnxruntime|PySide6_Essentials|shiboken6)==' constraints-mac.txt
       - name: Download both architectures of every pinned package and merge them
         run: |
           set -euo pipefail

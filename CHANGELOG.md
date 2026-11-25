@@ -20,12 +20,12 @@ KeyStow v1.0.7 stops older text from being pasted, answers faster, and has a new
 - Updating on Windows: the installer closes a running KeyStow for you.
 - Mac: fixes KeyStow closing at start-up or on the first dictation. It reads the keyboard layout once on the main thread, as macOS requires. If that is not possible, KeyStow starts without the shortcut and says so, instead of closing.
 - Mac: at start, KeyStow asks macOS for Accessibility access, so macOS shows its own prompt with a button to the right setting. If access is still missing when your text is ready, the text is left on the clipboard and the window says so.
-- Mac: KeyStow needs Apple Silicon and macOS 14 or later. On an older macOS the system now says so. The disk image includes "Open KeyStow the first time", with the one-time steps.
+- Mac: KeyStow needs macOS 14 or later; on an older macOS the system now says so. The Mac app is now one universal app built for both Apple Silicon and Intel. Apple Silicon is the supported Mac; on Intel Macs it passes its speech check on GitHub's build machines but has not yet been tried by hand. The disk image includes "Open KeyStow the first time", with the one-time steps.
 - The diagnostic log no longer gets a line for every dictation and can now roll over on Windows. Both installers include the licences of the third-party software inside them.
 
-Quit KeyStow before installing the update on a Mac. On a Mac, after replacing the app, remove KeyStow from System Settings > Privacy & Security > Accessibility and add it again: macOS treats each update of an app like this one as a new app. KeyStow understands English. The Windows x64 and Apple Silicon Mac installers include the base model. The Windows installer is unsigned; the Mac app is ad-hoc signed and not notarized.
+Quit KeyStow before installing the update on a Mac. On a Mac, after replacing the app, remove KeyStow from System Settings > Privacy & Security > Accessibility and add it again: macOS treats each update of an app like this one as a new app. KeyStow understands English. The Windows x64 and Mac installers include the base model. The Windows installer is unsigned; the Mac app is not notarized by Apple.
 
-Checks on this build: component tests passed on Windows and macOS; KeyStow's clipboard handling passed its round-trip checks on a real Windows clipboard on a test machine; and the packaged app on both loaded its own speech model and transcribed a recorded speech sample. Before publication, a real microphone, the global shortcut and pasting into other apps must be tried on real hardware; the result is recorded here when this version is promoted.
+Checks on this build: component tests passed on Windows and on an Intel Mac; KeyStow's clipboard handling passed its round-trip checks on a real Windows clipboard on a test machine; and the packaged app on both loaded its own speech model and transcribed a recorded speech sample. Before publication, a real microphone, the global shortcut and pasting into other apps must be tried on real hardware; the result is recorded here when this version is promoted.
 
 ## v1.0.6 - 2026-11-22
 

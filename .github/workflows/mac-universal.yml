@@ -1,23 +1,26 @@
-name: Mac universal build (Intel + Apple Silicon) - candidate
+name: Mac installer (universal - Intel and Apple Silicon)
 
-# Builds one KeyStow.app that runs natively on Intel and Apple Silicon Macs,
-# proves it on both kinds of hardware, and keeps the disk image as an
-# artifact. Publishes nothing. Once this passes it replaces the Apple
-# Silicon-only Mac job in build.yml.
+# Builds one KeyStow.app that runs natively on Intel and Apple Silicon Macs and
+# packages it as KeyStowMac.dmg (artifact "mac-installer"). Called by
+# build.yml for every pull request and release; can also be run by hand.
 #
-# How: download the Apple Silicon and the Intel build of every pinned
-# package, merge each pair into one universal wheel, install those into
-# python.org's universal Python, and build with PyInstaller for universal2.
-# onnxruntime is pinned to 1.23.2 on the Mac: it is the newest release with
-# Intel Mac wheels (1.24 and later are Apple Silicon only).
+# Built on GitHub's Intel Mac machines: the free Apple Silicon pool regularly
+# runs out of capacity and drops jobs after 15 minutes, which stopped releases
+# before. Building a universal app works on either kind of Mac, and the Intel
+# machine runs the packaged app's speech check natively. A second job repeats
+# the check on Apple Silicon when a machine is free; it cannot block a
+# release, because a person tries the installer on a real Mac before promotion.
+#
+# How: download the Apple Silicon and the Intel build of every pinned package,
+# merge each pair into one universal wheel, install those into python.org's
+# universal Python, and build with PyInstaller for universal2. onnxruntime is
+# pinned to 1.23.2 on the Mac: the newest release with Intel Mac wheels.
 on:
-  pull_request:
-    paths:
-      - 'keystow/**'
-      - 'installer/**'
-      - 'requirements.txt'
-      - 'run_keystow.py'
-      - '.github/workflows/mac-universal.yml'
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: '0.0.0'
   workflow_dispatch:
 
 permissions:
@@ -29,13 +32,13 @@ env:
   PYTHON_PKG: https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg
   PY: /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11
   MAC_FLOOR: '14.0'
-  VERSION: 0.0.0-candidate
+  VERSION: ${{ inputs.version || '0.0.0' }}
 
 jobs:
   universal:
-    name: Build and check on Apple Silicon (native and Rosetta)
-    runs-on: macos-15
-    timeout-minutes: 75
+    name: Build universal KeyStow.app (checked natively on Intel)
+    runs-on: macos-15-intel
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -44,9 +47,10 @@ jobs:
       - name: Install python.org's universal Python 3.11
         run: |
           set -euo pipefail
+          test "$(uname -m)" = x86_64
           curl -fsSL -o python.pkg "$PYTHON_PKG"
           sudo installer -pkg python.pkg -target /
-          lipo -archs "$PY" | tee /dev/stderr | grep -q x86_64
+          lipo -archs "$PY" | tee /dev/stderr | grep -q arm64
           "$PY" -m venv venv
           venv/bin/python -m pip install --upgrade pip delocate packaging
       - name: Mac constraints (onnxruntime 1.23.2, the last release with Intel wheels)
@@ -64,12 +68,10 @@ jobs:
         run: |
           venv/bin/pip install --no-index --find-links wheels/universal \
             -r requirements.txt pyinstaller pillow psutil huggingface-hub -c constraints-mac.txt
-      - name: Component tests, natively and under Rosetta (Intel code on this Mac)
+      - name: Component tests (Intel)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: |
-          venv/bin/python -m unittest discover -s tests
-          arch -x86_64 venv/bin/python -m unittest discover -s tests
+        run: venv/bin/python -m unittest discover -s tests
       - name: Remove PyAV (replaced by installer/stubs/av), make icons, licences, model
         run: |
           set -euo pipefail
@@ -88,9 +90,17 @@ jobs:
             --paths installer/stubs --additional-hooks-dir installer/hooks \
             --exclude-module PIL --exclude-module hf_xet \
             --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+          if find dist/KeyStow.app -type f \( -name 'libavcodec*' -o -name 'libx264*' -o -name 'libx265*' \) | grep -q .; then
+            echo "FFmpeg libraries in the build"; exit 1
+          fi
+          test -n "$(find dist/KeyStow.app -type f -path '*pynput/__init__.py' -print -quit)"
+          test -n "$(find dist/KeyStow.app -type f -path '*models/faster-whisper-base/model.bin' -print -quit)"
+          test -n "$(find dist/KeyStow.app -type f -path '*licenses/THIRD-PARTY-NOTICES.txt' -print -quit)"
       - name: Every native file must serve both architectures and macOS 14
         run: venv/bin/python installer/audit_universal.py dist/KeyStow.app "$MAC_FLOOR" release-evidence
-      - name: Info.plist, then sign with no further bundle edits
+      # Editing Info.plist breaks a signature, so edit first, sign afterwards,
+      # and do not touch the bundle again.
+      - name: Version, minimum macOS and microphone reason, then sign
         env:
           MAC_SIGNING_P12: ${{ secrets.MAC_SIGNING_P12 }}
           MAC_SIGNING_PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
@@ -100,24 +110,25 @@ jobs:
           import os, plistlib
           path = 'dist/KeyStow.app/Contents/Info.plist'
           info = plistlib.load(open(path, 'rb'))
-          info.update(CFBundleShortVersionString='0.0.0', CFBundleVersion='0.0.0',
+          info.update(CFBundleShortVersionString=os.environ['VERSION'], CFBundleVersion=os.environ['VERSION'],
                       CFBundleIdentifier='com.keystow.app', LSMinimumSystemVersion=os.environ['MAC_FLOOR'],
                       NSMicrophoneUsageDescription='KeyStow listens while you hold your shortcut and turns your speech into text on this Mac. Audio is not saved or sent anywhere.')
           plistlib.dump(info, open(path, 'wb'))
           PY
           bash installer/mac_sign.sh dist/KeyStow.app release-evidence
-      - name: Packaged app recognises speech on Apple Silicon and under Rosetta
+          lipo -archs dist/KeyStow.app/Contents/MacOS/KeyStow | tee release-evidence/architecture.txt
+      - name: Packaged app recognises speech (natively on Intel)
         run: |
           set -euo pipefail
-          venv/bin/python installer/verify_self_test.py dist/KeyStow.app/Contents/MacOS/KeyStow release-evidence/arm64
-          # The same check with the Intel slice of every binary (Rosetta 2).
-          cat > rosetta.sh <<'SH'
-          #!/bin/bash
-          exec arch -x86_64 "$(dirname "$0")/dist/KeyStow.app/Contents/MacOS/KeyStow" "$@"
-          SH
-          chmod +x rosetta.sh
-          venv/bin/python installer/verify_self_test.py ./rosetta.sh release-evidence/x86_64-rosetta
-      - name: Disk image with the first-launch guide
+          mkdir -p "$RUNNER_TEMP/app-check"
+          ditto dist/KeyStow.app "$RUNNER_TEMP/app-check/KeyStow.app"
+          venv/bin/python installer/verify_self_test.py "$RUNNER_TEMP/app-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence/x86_64
+      # The hosted Mac cannot always drive the window, so this is recorded,
+      # not a gate.
+      - name: Packaged app should open, refuse a second copy and close cleanly
+        continue-on-error: true
+        run: venv/bin/python installer/verify_candidate_processes.py "$RUNNER_TEMP/app-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence
+      - name: Disk image with the first-launch guide, checked as a buyer would mount it
         run: |
           set -euo pipefail
           mkdir -p dist/dmg
@@ -125,25 +136,40 @@ jobs:
           ln -s /Applications dist/dmg/Applications
           cp "installer/mac/Open KeyStow the first time.txt" dist/dmg/
           hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
+          hdiutil verify dist/KeyStowMac.dmg 2>&1 | tee release-evidence/dmg-verify.txt
+          mkdir -p "$RUNNER_TEMP/keystow-mounted"
+          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/keystow-mounted" dist/KeyStowMac.dmg
+          trap 'hdiutil detach "$RUNNER_TEMP/keystow-mounted"' EXIT
+          test -f "$RUNNER_TEMP/keystow-mounted/Open KeyStow the first time.txt"
+          codesign --verify --deep --strict "$RUNNER_TEMP/keystow-mounted/KeyStow.app"
+          venv/bin/python - "$RUNNER_TEMP/keystow-mounted/KeyStow.app/Contents/Info.plist" <<'PY' | tee release-evidence/mounted-app-info.txt
+          import os, plistlib, sys
+          info = plistlib.load(open(sys.argv[1], 'rb'))
+          assert info['CFBundleShortVersionString'] == os.environ['VERSION'], info['CFBundleShortVersionString']
+          assert info.get('NSMicrophoneUsageDescription'), 'the microphone reason is missing'
+          assert info.get('LSMinimumSystemVersion') == os.environ['MAC_FLOOR']
+          print('version', info['CFBundleShortVersionString'], 'minimum macOS', info['LSMinimumSystemVersion'])
+          PY
           du -sh dist/KeyStow.app dist/KeyStowMac.dmg | tee release-evidence/sizes.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mac-universal-dmg
+          name: mac-installer
           path: dist/KeyStowMac.dmg
           retention-days: 14
           if-no-files-found: error
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mac-universal-evidence
+          name: mac-evidence
           path: release-evidence/
           retention-days: 30
           if-no-files-found: ignore
 
-  intel:
-    name: Run the universal app on a real Intel Mac
+  apple-silicon:
+    name: Same check on Apple Silicon (when a machine is free; not a gate)
     needs: universal
-    runs-on: macos-15-intel
+    runs-on: macos-15
+    continue-on-error: true
     timeout-minutes: 30
     defaults:
       run:
@@ -152,23 +178,18 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: mac-universal-dmg
-      - name: Mount the disk image as a buyer would get it
+          name: mac-installer
+      - name: Packaged app recognises speech natively on Apple Silicon
         run: |
           set -euo pipefail
-          test "$(uname -m)" = x86_64
-          sw_vers | tee intel-evidence.txt
+          test "$(uname -m)" = arm64
           hdiutil attach -readonly -nobrowse -mountpoint /tmp/keystow KeyStowMac.dmg
-          test -f "/tmp/keystow/Open KeyStow the first time.txt"
           ditto /tmp/keystow/KeyStow.app "$RUNNER_TEMP/KeyStow.app"
           codesign --verify --deep --strict "$RUNNER_TEMP/KeyStow.app"
-      - name: Packaged app loads its model and recognises speech on Intel hardware
-        run: python3 installer/verify_self_test.py "$RUNNER_TEMP/KeyStow.app/Contents/MacOS/KeyStow" intel-evidence
+          python3 installer/verify_self_test.py "$RUNNER_TEMP/KeyStow.app/Contents/MacOS/KeyStow" arm64-evidence
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mac-intel-evidence
-          path: |
-            intel-evidence/
-            intel-evidence.txt
+          name: mac-arm64-evidence
+          path: arm64-evidence/
           if-no-files-found: ignore

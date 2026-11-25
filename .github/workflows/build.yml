@@ -154,149 +154,16 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  # One universal KeyStow.app for Intel and Apple Silicon Macs, built on an
+  # Intel machine (the free Apple Silicon pool too often has no capacity).
+  # See mac-universal.yml. It uploads the "mac-installer" artifact.
   build-mac:
-    name: Mac installer (Apple Silicon)
+    name: Mac installer (universal)
     needs: check
-    runs-on: macos-latest
-    timeout-minutes: 60
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.11'
-      - name: Require an Apple Silicon build machine
-        run: test "$(uname -m)" = arm64
-      - name: Install Python dependencies at the pinned versions
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller pillow psutil huggingface-hub -c installer/constraints.txt
-      - name: Component tests (controlled input and output, not a real microphone)
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m unittest discover -s tests -v
-      - name: Remove PyAV from the build environment (replaced by installer/stubs/av)
-        run: python -m pip uninstall -y av
-      - name: Generate app icon, gather third-party licences and fetch the bundled speech model at its pinned revision
-        run: |
-          python installer/make_icons.py
-          python installer/collect_licenses.py build-licenses
-          python -c "import os; from huggingface_hub import snapshot_download; snapshot_download(os.environ['MODEL_REPO'], revision=os.environ['MODEL_REVISION'], local_dir='models/faster-whisper-base')"
-      # A normal app bundle with its files inside it, not a single file that
-      # unpacks itself into the temp folder at every start.
-      - name: Build KeyStow.app with PyInstaller
-        run: |
-          export PYTHONPATH="$PWD/installer/stubs"  # the PyAV stand-in, also for PyInstaller's isolated imports
-          pyinstaller --noconfirm --windowed --name KeyStow --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app --add-data 'models/faster-whisper-base:models/faster-whisper-base' --add-data 'build-licenses:licenses' --add-data 'keystow/fonts:keystow/fonts' --paths installer/stubs --additional-hooks-dir installer/hooks --exclude-module PIL --exclude-module hf_xet --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
-          test -x dist/KeyStow.app/Contents/MacOS/KeyStow
-          # Nothing from FFmpeg may ship, and pynput must be replaceable source.
-          if find dist/KeyStow.app -type f \( -name 'libavcodec*' -o -name 'libavformat*' -o -name 'libx264*' -o -name 'libx265*' \) | grep -q .; then
-            echo "FFmpeg libraries in the build"; exit 1
-          fi
-          test -n "$(find dist/KeyStow.app -type f -path '*pynput/__init__.py' -print -quit)"
-          test -n "$(find dist/KeyStow.app -type f -path '*models/faster-whisper-base/model.bin' -print -quit)"
-          test -n "$(find dist/KeyStow.app -type f -path '*licenses/THIRD-PARTY-NOTICES.txt' -print -quit)"
-      # macOS gives an app no microphone audio, and shows no permission prompt,
-      # unless Info.plist says why the app wants the microphone. The libraries
-      # inside need macOS 14, so Info.plist says that too and an older macOS
-      # refuses with a clear message instead of the app failing to open.
-      # Editing Info.plist breaks the signature PyInstaller applied, and Apple
-      # Silicon refuses to open an app with a broken signature: edit first,
-      # sign afterwards, and do not touch the bundle again.
-      - name: Set the version, minimum macOS and microphone reason, then sign with no further bundle edits
-        env:
-          # KeyStow's own self-signed certificate (see installer/mac_sign.sh);
-          # without these secrets the app is ad-hoc signed.
-          MAC_SIGNING_P12: ${{ secrets.MAC_SIGNING_P12 }}
-          MAC_SIGNING_PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os, plistlib
-          path = 'dist/KeyStow.app/Contents/Info.plist'
-          with open(path, 'rb') as handle:
-              info = plistlib.load(handle)
-          info.update(
-              CFBundleShortVersionString=os.environ['VERSION'],
-              CFBundleVersion=os.environ['VERSION'],
-              CFBundleIdentifier='com.keystow.app',
-              LSMinimumSystemVersion='14.0',
-              NSMicrophoneUsageDescription='KeyStow listens while you hold your shortcut and turns your speech into text on this Mac. Audio is not saved or sent anywhere.',
-          )
-          with open(path, 'wb') as handle:
-              plistlib.dump(info, handle)
-          PY
-          mkdir -p release-evidence
-          bash installer/mac_sign.sh dist/KeyStow.app release-evidence
-          file dist/KeyStow.app/Contents/MacOS/KeyStow | tee release-evidence/architecture.txt
-      # Both checks run a copy, so the bundle that ships is never opened before
-      # packaging. The first one stops the release if it fails.
-      - name: Signed app copy must load its own model and recognise the speech sample
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/app-check"
-          ditto dist/KeyStow.app "$RUNNER_TEMP/app-check/KeyStow.app"
-          python installer/verify_self_test.py "$RUNNER_TEMP/app-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence
-      # The hosted Mac cannot always drive the window, so a failure here is
-      # recorded and reported without stopping the build.
-      - name: Signed app copy should open, refuse a second copy and close cleanly
-        id: mac_launch
-        continue-on-error: true
-        run: python installer/verify_candidate_processes.py "$RUNNER_TEMP/app-check/KeyStow.app/Contents/MacOS/KeyStow" release-evidence
-      - name: Record the Mac launch check result
-        if: always()
-        env:
-          OUTCOME: ${{ steps.mac_launch.outcome }}
-        run: |
-          mkdir -p release-evidence
-          echo "Mac launch check on the signed app copy - $OUTCOME" | tee -a "$GITHUB_STEP_SUMMARY" release-evidence/mac-launch-check.txt
-      - name: Package the DMG and verify the app inside the mounted image
-        run: |
-          set -euo pipefail
-          mkdir -p dist/dmg
-          ditto dist/KeyStow.app dist/dmg/KeyStow.app
-          ln -s /Applications dist/dmg/Applications
-          # The one-time first-launch steps live in the disk image, not on the website.
-          cp "installer/mac/Open KeyStow the first time.txt" dist/dmg/
-          codesign --verify --deep --strict dist/dmg/KeyStow.app
-          hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
-          hdiutil verify dist/KeyStowMac.dmg 2>&1 | tee release-evidence/dmg-verify.txt
-          mkdir -p "$RUNNER_TEMP/keystow-mounted"
-          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/keystow-mounted" dist/KeyStowMac.dmg
-          trap 'hdiutil detach "$RUNNER_TEMP/keystow-mounted"' EXIT
-          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/keystow-mounted/KeyStow.app" 2>&1 | tee release-evidence/mounted-app-signature-verify.txt
-          python - "$RUNNER_TEMP/keystow-mounted/KeyStow.app/Contents/Info.plist" <<'PY' | tee release-evidence/mounted-app-info.txt
-          import os, plistlib, sys
-          with open(sys.argv[1], 'rb') as handle:
-              info = plistlib.load(handle)
-          assert info['CFBundleShortVersionString'] == os.environ['VERSION'], info['CFBundleShortVersionString']
-          assert info.get('NSMicrophoneUsageDescription'), 'the microphone reason is missing'
-          assert info.get('LSMinimumSystemVersion') == '14.0', info.get('LSMinimumSystemVersion')
-          print('version', info['CFBundleShortVersionString'])
-          print('identifier', info['CFBundleIdentifier'])
-          print('minimum macOS', info['LSMinimumSystemVersion'])
-          print('microphone reason present')
-          PY
-          test -n "$(find "$RUNNER_TEMP/keystow-mounted/KeyStow.app" -type f -path '*licenses/THIRD-PARTY-NOTICES.txt' -print -quit)"
-      - name: Stage Mac installer
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: mac-installer
-          path: dist/KeyStowMac.dmg
-          retention-days: 14
-          if-no-files-found: error
-      - name: Keep the signing and app check evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: mac-evidence
-          path: release-evidence/
-          retention-days: 30
-          if-no-files-found: ignore
+    uses: ./.github/workflows/mac-universal.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
+    secrets: inherit
 
   publish:
     name: Publish the release

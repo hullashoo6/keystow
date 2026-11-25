@@ -28,5 +28,5 @@ the first time you open it. After that it opens like any other app.
 Your voice is processed privately on your own computer and never sent to
 the cloud. Dictation works without internet too.
 
-Needs macOS 14 (Sonoma) or later, on an Apple Silicon or Intel Mac.
+Needs macOS 14 (Sonoma) or later.
 Help: hullashoo6@gmail.com

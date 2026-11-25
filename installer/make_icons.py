@@ -1,50 +1,45 @@
-"""Generate keystow.ico (Windows) and keystow.icns (Mac) from the soundwave glyph.
+"""Generate keystow.ico (Windows) and keystow.icns (Mac) from the website logo.
 
 Run by CI before PyInstaller: python installer/make_icons.py
+The pixels come from keystow/tray_icons.py, which renders docs/assets/logo.svg,
+so the installer, the app and the website show exactly the same mark.
 """
+import io
 import os
+import sys
 
-from PIL import Image, ImageDraw
-
-BG = (18, 24, 38, 255)
-G1 = (124, 140, 255)
-G2 = (167, 139, 250)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+
+from PIL import Image  # noqa: E402
+from PySide6.QtCore import QBuffer, QIODevice  # noqa: E402
+from PySide6.QtGui import QGuiApplication  # noqa: E402
+
+from keystow.tray_icons import render  # noqa: E402
+
+ICO_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)  # 125%/150% scaling uses 20/24/40
+ICNS_SIZES = (16, 32, 64, 128, 256, 512, 1024)
 
 
-def gradient(size):
-    g = Image.new("RGBA", (size, size))
-    for x in range(size):
-        t = x / max(size - 1, 1)
-        g.paste(tuple(int(G1[i] + (G2[i] - G1[i]) * t) for i in range(3)) + (255,), (x, 0, x + 1, size))
-    return g
-
-
-def bars_mask(size):
-    mask = Image.new("L", (size, size), 0)
-    md = ImageDraw.Draw(mask)
-    hs = [int(h * size / 512) for h in (90, 160, 230, 280, 230, 160, 90)]
-    bw, gap = int(34 * size / 512), int(22 * size / 512)
-    x = (size - (len(hs) * bw + (len(hs) - 1) * gap)) // 2
-    for hgt in hs:
-        y0 = (size - hgt) // 2
-        md.rounded_rectangle([x, y0, x + bw, y0 + hgt], radius=bw // 2, fill=255)
-        x += bw + gap
-    return mask
+def pil(size: int) -> Image.Image:
+    buffer = QBuffer()
+    buffer.open(QIODevice.WriteOnly)
+    render(size, "app").save(buffer, "PNG")
+    return Image.open(io.BytesIO(bytes(buffer.data()))).convert("RGBA")
 
 
 def main():
-    size = 1024
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle([size // 32, size // 32, size - size // 32, size - size // 32],
-                        radius=int(size * 0.226), fill=BG)
-    img.paste(gradient(size), (0, 0), bars_mask(size))
-    img.save(os.path.join(HERE, "keystow.ico"),
-             sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    img.save(os.path.join(HERE, "keystow.icns"),
-             sizes=[(16, 16), (32, 32), (64, 64), (128, 128), (256, 256), (512, 512), (1024, 1024)])
-    print("wrote keystow.ico + keystow.icns")
+    app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])  # noqa: F841
+    images = {s: pil(s) for s in sorted(set(ICO_SIZES) | set(ICNS_SIZES))}
+    # Each size rendered on its own (not scaled down from 1024) so small
+    # icons stay crisp.
+    images[256].save(os.path.join(HERE, "keystow.ico"), sizes=[(s, s) for s in ICO_SIZES],
+                     append_images=[images[s] for s in ICO_SIZES if s != 256])
+    images[1024].save(os.path.join(HERE, "keystow.icns"),
+                      append_images=[images[s] for s in ICNS_SIZES if s != 1024])
+    images[256].save(os.path.join(HERE, "keystow-256.png"))
+    print("wrote keystow.ico, keystow.icns and keystow-256.png from logo.svg")
 
 
 if __name__ == "__main__":

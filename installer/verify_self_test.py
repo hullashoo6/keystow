@@ -17,7 +17,7 @@ import tempfile
 exe = Path(sys.argv[1]).resolve()
 evidence = Path(sys.argv[2])
 evidence.mkdir(parents=True, exist_ok=True)
-sample = Path(__file__).resolve().parent / 'selftest' / 'jfk.flac'
+sample = Path(__file__).resolve().parent / 'selftest' / 'jfk.wav'
 report_path = (evidence / 'self-test.json').resolve()
 if report_path.exists():
     report_path.unlink()

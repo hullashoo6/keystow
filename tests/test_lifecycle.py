@@ -504,6 +504,118 @@ class LifecycleTest(unittest.TestCase):
         self.assertIn('Accessibility', self.c._ready_message())
         self.c.shutdown()  # an unstarted listener must not break quitting
 
+    def use_delivery(self, outcome='confirmed', reason=''):
+        result = types.SimpleNamespace(outcome=outcome, reason=reason, restored=outcome == 'confirmed')
+        deliver = Mock(return_value=result)
+        for name, value in {'deliver': deliver, 'capture_target': Mock(return_value='front window'),
+                            'copy_text': Mock(return_value=True)}.items():
+            patch.object(self.module, name, value).start()
+        return deliver
+
+    def test_text_goes_to_the_window_in_front_at_release(self):
+        deliver = self.use_delivery()
+        self.c.start_recording(); self.c.stop_recording(); self.finish()
+        deliver.assert_called_once_with('second session', 'front window')
+        self.assertTrue(self.window.set_state.call_args.args[0].startswith('Pasted.'))
+
+    def test_one_recording_is_delivered_at_most_once(self):
+        deliver = self.use_delivery()
+        self.c._transcribe_and_type('audio', self.c.transcriber, 7, 'front window')
+        self.c._transcribe_and_type('audio', self.c.transcriber, 7, 'front window')
+        deliver.assert_called_once()
+
+    def test_not_pasting_says_why_and_copy_recovers_the_text(self):
+        self.use_delivery('manual', 'focus_changed')
+        self.c.start_recording(); self.c.stop_recording(); self.finish()
+        self.assertIn('switched windows', self.window.set_state.call_args.args[0])
+        self.c.copy_latest()
+        self.module.copy_text.assert_called_once_with('second session')
+        self.assertIn('Copied', self.window.set_state.call_args.args[0])
+
+    def test_unconfirmed_paste_is_reported_not_retried(self):
+        deliver = self.use_delivery('unconfirmed', 'no_read_seen')
+        self.c.start_recording(); self.c.stop_recording(); self.finish()
+        deliver.assert_called_once()
+        self.assertIn('could not confirm', self.window.set_state.call_args.args[0])
+
+    def test_missed_key_release_is_recovered_by_the_watchdog(self):
+        self.use_delivery()
+        self.c._hotkey = types.SimpleNamespace(value=types.SimpleNamespace(vk=0xA3))
+        self.c._key_state_reader = lambda: (lambda vk: False)  # key is physically up
+        self.c._key_state_hidden = lambda: False
+        with self.c._key_lock:
+            self.c._hotkey_down = True  # ...but the release event never arrived
+        self.c._start_from_key()
+        deadline = time.monotonic() + 2
+        while self.c._phase == 'recording' and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertNotEqual(self.c._phase, 'recording')
+        self.finish()
+        self.assertFalse(self.c._hotkey_down)
+
+    def test_button_recording_is_not_cut_short_by_the_watchdog(self):
+        self.c._hotkey = types.SimpleNamespace(value=types.SimpleNamespace(vk=0xA3))
+        self.c._key_state_reader = lambda: (lambda vk: False)
+        self.c.start_recording()  # from the window's button: the key is not involved
+        time.sleep(0.3)
+        self.assertEqual(self.c._phase, 'recording')
+        self.c.shutdown()
+
+    def streaming_recorder(self, audio):
+        class SinkRecorder:
+            supports_sink = True
+            def __init__(self): self.sink = 'unset'
+            def start(self, sink=None): self.sink = sink
+            def stop(self): return audio
+        self.c.recorder = SinkRecorder()
+        stream = Mock()
+        stream.finish.return_value = 'denoised audio'
+        patch.object(self.module.denoise, 'start_streaming', return_value=stream).start()
+        return stream
+
+    def test_noise_suppression_streams_during_recording_and_feeds_the_model(self):
+        audio = types.SimpleNamespace(size=16000, any=lambda: True)
+        stream = self.streaming_recorder(audio)
+        self.c.start_recording()
+        self.assertIs(self.c.recorder.sink, stream.push)
+        self.c.stop_recording(); self.finish()
+        stream.finish.assert_called_once_with(16000)
+        self.c.transcriber.transcribe.assert_called_once_with(audio, denoised='denoised audio')
+
+    def test_a_tap_cancels_the_streaming_denoiser(self):
+        stream = self.streaming_recorder(types.SimpleNamespace(size=10, any=lambda: True))
+        self.c.start_recording(); self.c.stop_recording()
+        stream.cancel.assert_called_once()
+        stream.finish.assert_not_called()
+
+    def test_a_failed_stream_falls_back_to_denoising_the_whole_recording(self):
+        audio = types.SimpleNamespace(size=16000, any=lambda: True)
+        stream = self.streaming_recorder(audio)
+        stream.finish.side_effect = RuntimeError('native failure')
+        self.c.start_recording(); self.c.stop_recording(); self.finish()
+        self.c.transcriber.transcribe.assert_called_once_with(audio)
+
+    def test_quit_forgets_the_latest_dictation(self):
+        self.use_delivery()
+        self.c.start_recording(); self.c.stop_recording(); self.finish()
+        self.assertEqual(self.c._last_text, 'second session')
+        self.c.shutdown()
+        self.assertIsNone(self.c._last_text)
+
+    def test_mac_layout_failure_starts_no_listener_instead_of_crashing(self):
+        # A listener would read the layout on its own thread: fatal on macOS.
+        listener = Mock()
+        mac = Mock()
+        mac.prepare.return_value = False
+        self.module.keyboard.Listener = Mock(return_value=listener)
+        with patch.object(self.module, 'sys', types.SimpleNamespace(platform='darwin', frozen=True)), \
+             patch.object(self.module, 'mac_input', mac):
+            self.c.start()
+        self.addCleanup(self.c.shutdown)
+        self.module.keyboard.Listener.assert_not_called()
+        self.assertTrue(self.c._layout_failed)
+        self.assertIn('keyboard layout', self.c._ready_message())
+
     def test_mac_source_run_prepares_the_layout_without_a_system_prompt(self):
         listener, mac = self.start_as('darwin', False, False)
         mac.prepare.assert_called_once()

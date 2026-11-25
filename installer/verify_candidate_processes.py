@@ -53,7 +53,21 @@ with tempfile.TemporaryDirectory() as home:
         if sys.platform=='win32':
             from PIL import ImageGrab
             ImageGrab.grab().save(evidence/'frozen-before-close.png')
-            assert ctypes.windll.user32.PostMessageW(found[0],0x0010,0,0),'WM_CLOSE failed'
+            # Look again now: record every KeyStow-titled window and close the
+            # visible one (a handle found at startup may belong to a window
+            # Qt has since replaced).
+            u32=ctypes.windll.user32
+            u32.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
+            first=list(found);found.clear();tracked.update(c.pid for c in family());u32.EnumWindows(callback,0)
+            windows=[]
+            for hwnd in found:
+                cls=ctypes.create_unicode_buffer(256);u32.GetClassNameW(hwnd,cls,256)
+                windows.append({'hwnd':hwnd,'class':cls.value,'visible':bool(u32.IsWindowVisible(hwnd))})
+            (evidence/'frozen-windows.json').write_text(json.dumps({'at_start':first,'before_close':windows,
+                'first_still_exists':[bool(u32.IsWindow(h)) for h in first]},indent=2))
+            target=next((w['hwnd'] for w in windows if w['visible']),windows[0]['hwnd'] if windows else None)
+            assert target,'no KeyStow window left before close'
+            assert u32.PostMessageW(target,0x0010,0,0),'WM_CLOSE failed (error %d)'%ctypes.get_last_error()
             close_action='WM_CLOSE on actual frozen Qt window'
         else:
             subprocess.run(['screencapture','-x',str(evidence/'frozen-before-close.png')],check=True,timeout=15)
@@ -78,3 +92,10 @@ with tempfile.TemporaryDirectory() as home:
             except psutil.Error:pass
         if p.poll() is None:p.kill();p.wait(timeout=10)
         output.close()
+        # Keep the app's own diagnostics from its private home for the evidence.
+        import shutil
+        logs=Path(home)/'.keystow'/'logs'
+        if logs.is_dir():
+            for item in logs.iterdir():
+                try:shutil.copy2(item,evidence/('app-'+item.name))
+                except OSError:pass

@@ -28,6 +28,13 @@ SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=keystow.ico
 PrivilegesRequired=lowest
+; Updating while KeyStow runs: Setup asks Windows (Restart Manager) to close
+; it instead of failing on files in use. KeyStow quits cleanly when asked to
+; close. It is started again by the "Launch KeyStow" option at the end, not by
+; Restart Manager, so it never comes back twice.
+CloseApplications=yes
+CloseApplicationsFilter=*.exe,*.dll,*.pyd
+RestartApplications=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 

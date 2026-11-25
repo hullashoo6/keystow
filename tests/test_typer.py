@@ -81,9 +81,23 @@ class TyperTest(unittest.TestCase):
         self.m.type_text('retry')
         self.assertEqual(self.clipboard,'previous')
 
-    def mac(self,trusted=True,controller=None,key=None):
-        """Stand-in for keystow.mac_input: no real macOS call is made."""
+    _MAIN_THREAD = object()
+
+    def mac(self,trusted=True,controller=_MAIN_THREAD,key=None):
+        """Stand-in for keystow.mac_input: no real macOS call is made.
+
+        By default it hands back a Controller "made on the main thread" (the
+        test keyboard); controller=None models prepare() having failed.
+        """
+        if controller is self._MAIN_THREAD:controller=self.keyboard
         return types.SimpleNamespace(accessibility_trusted=lambda:trusted,controller=lambda:controller,paste_key=lambda:key)
+
+    def test_mac_without_main_thread_controller_sends_nothing_and_leaves_text(self):
+        with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=self.mac(controller=None)):
+            with self.assertRaises(self.m.PasteBlocked) as caught:self.m.type_text('new')
+        self.assertEqual(caught.exception.reason,'no_controller')
+        self.assertEqual(self.events,[])  # no Controller created on the worker thread
+        self.assertEqual(self.clipboard,'new')
 
     def test_mac_modifier_and_disabled_restore(self):
         with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=self.mac()):
@@ -114,10 +128,13 @@ class TyperTest(unittest.TestCase):
         self.assertEqual(self.events,[('press','cmd'),('press','v'),('release','v'),('release','cmd')])
         self.assertEqual(self.clipboard,'previous')
 
-    def test_mac_helpers_unavailable_falls_back_to_the_plain_paste(self):
+    def test_mac_helpers_unavailable_sends_nothing_instead_of_a_worker_thread_controller(self):
+        # A Controller made here would end the app on current macOS.
         with patch.object(self.m.sys,'platform','darwin'),patch.object(self.m,'_mac_input',return_value=None):
-            self.m.type_text('new')
-        self.assertEqual(self.events,[('press','cmd'),('press','v'),('release','v'),('release','cmd')])
+            with self.assertRaises(self.m.PasteBlocked) as caught:self.m.type_text('new')
+        self.assertEqual(caught.exception.reason,'no_controller')
+        self.assertEqual(self.events,[])
+        self.assertEqual(self.clipboard,'new')
 
     def test_windows_never_consults_the_mac_helpers(self):
         with patch.object(self.m,'_mac_input',side_effect=AssertionError('Mac helpers used on Windows')):

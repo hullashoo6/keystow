@@ -60,14 +60,14 @@ class ModelRecoveryJourneyTest(unittest.TestCase):
                 assert not window.model_box.isEnabled()
                 controller._loader.failed.emit("download interrupted")
                 app.processEvents()
-                assert window.model_box.currentText() == "base"
+                assert window.model_box.currentText() == ui.MODEL_LABELS["base"]
                 assert window.model_box.isEnabled()
                 assert window.hotkey_box.isEnabled()
                 assert "Previous model" in window.status.text()
                 assert controller.transcriber is old_model
                 controller.start_recording()
                 app.processEvents()
-                assert window.record_btn.text() == ("Stop and type" if window._toggle else "Release to type")
+                assert window.record_btn.text() == ("Stop" if window._toggle else "Release to finish")
                 controller.stop_recording()
                 controller._worker.join(3)
                 app.processEvents()
@@ -75,7 +75,7 @@ class ModelRecoveryJourneyTest(unittest.TestCase):
                 old_model.transcribe.assert_called_once_with("audio")
                 paste.assert_called_once_with("recovered dictation")
                 assert window.transcript.text() == "recovered dictation"
-                assert window.model_box.currentText() == "base"
+                assert window.model_box.currentText() == ui.MODEL_LABELS["base"]
                 assert window.model_box.isEnabled()
         ''')
         result = subprocess.run([sys.executable, '-c', script],

@@ -63,6 +63,7 @@ jobs:
               -c constraints-mac.txt --only-binary=:all: --python-version 3.11 --implementation cp \
               --abi cp311 --platform "macosx_14_0_${arch}" -d "wheels/${arch}"
           done
+          export PATH="$PWD/venv/bin:$PATH"  # delocate-merge lives in the build venv
           venv/bin/python installer/merge_universal_wheels.py wheels/arm64 wheels/x86_64 wheels/universal
       - name: Install the universal wheels
         run: |

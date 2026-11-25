@@ -207,7 +207,12 @@ jobs:
       # Editing Info.plist breaks the signature PyInstaller applied, and Apple
       # Silicon refuses to open an app with a broken signature: edit first,
       # sign afterwards, and do not touch the bundle again.
-      - name: Set the version, minimum macOS and microphone reason, then ad-hoc sign with no further bundle edits
+      - name: Set the version, minimum macOS and microphone reason, then sign with no further bundle edits
+        env:
+          # KeyStow's own self-signed certificate (see installer/mac_sign.sh);
+          # without these secrets the app is ad-hoc signed.
+          MAC_SIGNING_P12: ${{ secrets.MAC_SIGNING_P12 }}
+          MAC_SIGNING_PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -226,9 +231,7 @@ jobs:
               plistlib.dump(info, handle)
           PY
           mkdir -p release-evidence
-          codesign --force --deep --sign - --preserve-metadata=entitlements dist/KeyStow.app
-          codesign --verify --deep --strict --verbose=2 dist/KeyStow.app 2>&1 | tee release-evidence/app-signature-verify.txt
-          codesign -d --verbose=4 dist/KeyStow.app 2>&1 | tee release-evidence/app-signature-details.txt
+          bash installer/mac_sign.sh dist/KeyStow.app release-evidence
           file dist/KeyStow.app/Contents/MacOS/KeyStow | tee release-evidence/architecture.txt
       # Both checks run a copy, so the bundle that ships is never opened before
       # packaging. The first one stops the release if it fails.

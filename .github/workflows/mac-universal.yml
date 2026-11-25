@@ -90,7 +90,10 @@ jobs:
             --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
       - name: Every native file must serve both architectures and macOS 14
         run: venv/bin/python installer/audit_universal.py dist/KeyStow.app "$MAC_FLOOR" release-evidence
-      - name: Info.plist, then ad-hoc sign with no further bundle edits
+      - name: Info.plist, then sign with no further bundle edits
+        env:
+          MAC_SIGNING_P12: ${{ secrets.MAC_SIGNING_P12 }}
+          MAC_SIGNING_PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
         run: |
           set -euo pipefail
           venv/bin/python - <<'PY'
@@ -102,8 +105,7 @@ jobs:
                       NSMicrophoneUsageDescription='KeyStow listens while you hold your shortcut and turns your speech into text on this Mac. Audio is not saved or sent anywhere.')
           plistlib.dump(info, open(path, 'wb'))
           PY
-          codesign --force --deep --sign - dist/KeyStow.app
-          codesign --verify --deep --strict --verbose=2 dist/KeyStow.app
+          bash installer/mac_sign.sh dist/KeyStow.app release-evidence
       - name: Packaged app recognises speech on Apple Silicon and under Rosetta
         run: |
           set -euo pipefail

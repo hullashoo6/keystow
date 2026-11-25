@@ -10,6 +10,9 @@ from . import config
 
 
 class PushToTalkRecorder:
+    # start() accepts a sink that receives each block of audio as it arrives.
+    supports_sink = True
+
     def __init__(self, sample_rate: int = config.SAMPLE_RATE, channels: int = config.CHANNELS):
         self.sample_rate = sample_rate
         self.channels = channels
@@ -17,16 +20,18 @@ class PushToTalkRecorder:
         self._stream: sd.InputStream | None = None
         self._lock = threading.Lock()
         self._recording = False
+        self._sink = None
 
     @property
     def is_recording(self) -> bool:
         return self._recording
 
-    def start(self) -> None:
+    def start(self, sink=None) -> None:
         with self._lock:
             if self._recording:
                 return
             self._frames = []
+            self._sink = sink
             stream = sd.InputStream(samplerate=self.sample_rate,
                                     channels=self.channels, dtype="float32",
                                     callback=self._callback)
@@ -61,6 +66,14 @@ class PushToTalkRecorder:
             finally:
                 # Do not retain audio after delivery, failure or explicit quit.
                 self._frames = []
+                self._sink = None
 
     def _callback(self, indata, frames, time_info, status) -> None:  # noqa: ARG002
-        self._frames.append(indata.copy())
+        block = indata.copy()
+        self._frames.append(block)
+        sink = self._sink
+        if sink is not None:
+            try:
+                sink(block if self.channels == 1 else block.mean(axis=1))
+            except Exception:  # noqa: BLE001 - the recording itself must go on
+                self._sink = None

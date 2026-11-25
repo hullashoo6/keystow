@@ -39,6 +39,12 @@ if [ -n "${MAC_SIGNING_P12:-}" ] && [ -n "${MAC_SIGNING_PASSWORD:-}" ]; then
   [ -n "$identity" ] || { echo "KeyStow signing identity not found in the imported certificate"; exit 1; }
   echo "Signing with KeyStow's certificate $identity" | tee "$evidence/signing-identity.txt"
 else
+  if [ "${REQUIRE_SIGNING:-false}" = true ]; then
+    # A release must carry KeyStow's stable identity; an ad-hoc release would
+    # make every Mac user re-allow Accessibility again.
+    echo "Release build without the MAC_SIGNING_P12 / MAC_SIGNING_PASSWORD secrets; refusing to ad-hoc sign"
+    exit 1
+  fi
   echo "No signing secrets: ad-hoc signature (Accessibility must be re-added after updates)" \
     | tee "$evidence/signing-identity.txt"
 fi

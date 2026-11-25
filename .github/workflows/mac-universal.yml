@@ -120,6 +120,9 @@ jobs:
         env:
           MAC_SIGNING_P12: ${{ secrets.MAC_SIGNING_P12 }}
           MAC_SIGNING_PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
+          # A release (run by hand with a version) must carry KeyStow's own
+          # certificate; pull-request checks may fall back to ad-hoc.
+          REQUIRE_SIGNING: ${{ github.event_name == 'workflow_dispatch' && inputs.version != '' && inputs.version != '0.0.0' }}
         run: |
           set -euo pipefail
           venv/bin/python - <<'PY'

@@ -17,6 +17,10 @@ class PasteBlocked(RuntimeError):
 
     left_on_clipboard = True
 
+    def __init__(self, message: str, reason: str = "accessibility"):
+        super().__init__(message)
+        self.reason = reason
+
 
 def _mac_input():
     """KeyStow's Mac keyboard helpers, or None when they cannot be loaded."""
@@ -41,7 +45,8 @@ def type_text(text: str, restore_clipboard: bool = True) -> None:
     """
     if not text:
         return
-    mac = _mac_input() if sys.platform == "darwin" else None
+    darwin = sys.platform == "darwin"
+    mac = _mac_input() if darwin else None
     previous = None
     if restore_clipboard:
         try:
@@ -52,6 +57,12 @@ def type_text(text: str, restore_clipboard: bool = True) -> None:
     pyperclip.copy(text)
     if mac is not None and mac.accessibility_trusted() is False:
         raise PasteBlocked("macOS is not letting KeyStow paste; the text is on the clipboard")
+    if darwin and (mac is None or mac.controller() is None):
+        # Creating a key Controller on this worker thread ends the app on
+        # current macOS. Without the one made on the main thread, send nothing
+        # and leave the text for the user to paste.
+        raise PasteBlocked("KeyStow could not prepare its paste keys; the text is on the clipboard",
+                           reason="no_controller")
     keyboard = None
     held = []
     try:
@@ -92,3 +103,43 @@ def type_text(text: str, restore_clipboard: bool = True) -> None:
         # Do not mask the original dispatch failure with a cleanup failure.
         if cleanup_error is not None and sys.exc_info()[0] is None:
             raise RuntimeError("Paste requested, but clipboard/key cleanup failed; transcript remains available") from cleanup_error
+
+
+class Delivered:
+    """What is known about one delivery attempt (mirrors win_delivery.Result)."""
+
+    def __init__(self, outcome: str, reason: str = "", restored: bool = False):
+        self.outcome, self.reason, self.restored = outcome, reason, restored
+
+
+def capture_target():
+    """Remember the window in front when the user releases the key (Windows)."""
+    if sys.platform == "win32":
+        from keystow import win_delivery
+
+        return win_delivery.capture_target()
+    return None
+
+
+def deliver(text: str, target):
+    """Insert one dictation at most once and report the outcome.
+
+    Windows uses read-confirmed delivery (win_delivery). Elsewhere the paste
+    is requested as before and reported as "requested": nothing confirms it.
+    """
+    if sys.platform == "win32":
+        from keystow import win_delivery
+
+        return win_delivery.deliver(text, target)
+    type_text(text)
+    return Delivered("requested", restored=True)
+
+
+def copy_text(text: str) -> bool:
+    """The user's explicit "Copy": put the latest dictation on the clipboard."""
+    if sys.platform == "win32":
+        from keystow import win_delivery
+
+        return win_delivery.copy_text(text)
+    pyperclip.copy(text)
+    return True

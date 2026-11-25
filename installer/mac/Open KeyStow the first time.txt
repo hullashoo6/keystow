@@ -1,0 +1,32 @@
+Opening KeyStow for the first time on a Mac
+===========================================
+
+KeyStow is not notarized by Apple, so macOS asks you to confirm it once,
+the first time you open it. After that it opens like any other app.
+
+1. Drag KeyStow onto the Applications folder in this window.
+
+2. Open your Applications folder and double-click KeyStow.
+   macOS says it could not verify KeyStow. Click Done.
+
+3. Open System Settings, then Privacy & Security. Scroll down to the
+   Security section. Next to the message about KeyStow being blocked,
+   click Open Anyway, then confirm with your password or Touch ID.
+   (On macOS 14 you can instead Control-click KeyStow in Applications,
+   choose Open, then Open again.)
+
+4. KeyStow opens. It needs two permissions, both under System Settings >
+   Privacy & Security:
+   - Microphone: macOS asks the first time you dictate. Click Allow.
+   - Accessibility, for the shortcut and for pasting: KeyStow asks when it
+     starts. Click Open System Settings, switch KeyStow on, then quit and
+     reopen KeyStow.
+
+5. Click into any text box, hold Right Option, say a sentence and let go.
+   Your words appear where the cursor is.
+
+Your voice is processed privately on your own computer and never sent to
+the cloud. Dictation works without internet too.
+
+Needs macOS 14 (Sonoma) or later, on an Apple Silicon or Intel Mac.
+Help: hullashoo6@gmail.com

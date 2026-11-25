@@ -1,0 +1,171 @@
+name: Mac universal build (Intel + Apple Silicon) - candidate
+
+# Builds one KeyStow.app that runs natively on Intel and Apple Silicon Macs,
+# proves it on both kinds of hardware, and keeps the disk image as an
+# artifact. Publishes nothing. Once this passes it replaces the Apple
+# Silicon-only Mac job in build.yml.
+#
+# How: download the Apple Silicon and the Intel build of every pinned
+# package, merge each pair into one universal wheel, install those into
+# python.org's universal Python, and build with PyInstaller for universal2.
+# onnxruntime is pinned to 1.23.2 on the Mac: it is the newest release with
+# Intel Mac wheels (1.24 and later are Apple Silicon only).
+on:
+  pull_request:
+    paths:
+      - 'keystow/**'
+      - 'installer/**'
+      - 'requirements.txt'
+      - 'run_keystow.py'
+      - '.github/workflows/mac-universal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MODEL_REPO: Systran/faster-whisper-base
+  MODEL_REVISION: ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66
+  PYTHON_PKG: https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg
+  PY: /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11
+  MAC_FLOOR: '14.0'
+  VERSION: 0.0.0-candidate
+
+jobs:
+  universal:
+    name: Build and check on Apple Silicon (native and Rosetta)
+    runs-on: macos-15
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install python.org's universal Python 3.11
+        run: |
+          set -euo pipefail
+          curl -fsSL -o python.pkg "$PYTHON_PKG"
+          sudo installer -pkg python.pkg -target /
+          lipo -archs "$PY" | tee /dev/stderr | grep -q x86_64
+          "$PY" -m venv venv
+          venv/bin/python -m pip install --upgrade pip delocate packaging
+      - name: Mac constraints (onnxruntime 1.23.2, the last release with Intel wheels)
+        run: sed -E 's/^onnxruntime==.*/onnxruntime==1.23.2/' installer/constraints.txt > constraints-mac.txt
+      - name: Download both architectures of every pinned package and merge them
+        run: |
+          set -euo pipefail
+          for arch in arm64 x86_64; do
+            venv/bin/pip download -r requirements.txt pyinstaller pillow psutil huggingface-hub \
+              -c constraints-mac.txt --only-binary=:all: --python-version 3.11 --implementation cp \
+              --abi cp311 --platform "macosx_14_0_${arch}" -d "wheels/${arch}"
+          done
+          venv/bin/python installer/merge_universal_wheels.py wheels/arm64 wheels/x86_64 wheels/universal
+      - name: Install the universal wheels
+        run: |
+          venv/bin/pip install --no-index --find-links wheels/universal \
+            -r requirements.txt pyinstaller pillow psutil huggingface-hub -c constraints-mac.txt
+      - name: Component tests, natively and under Rosetta (Intel code on this Mac)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          venv/bin/python -m unittest discover -s tests
+          arch -x86_64 venv/bin/python -m unittest discover -s tests
+      - name: Remove PyAV (replaced by installer/stubs/av), make icons, licences, model
+        run: |
+          set -euo pipefail
+          venv/bin/python -m pip uninstall -y av
+          venv/bin/python installer/make_icons.py
+          venv/bin/python installer/collect_licenses.py build-licenses
+          venv/bin/python -c "import os; from huggingface_hub import snapshot_download; snapshot_download(os.environ['MODEL_REPO'], revision=os.environ['MODEL_REVISION'], local_dir='models/faster-whisper-base')"
+      - name: Build KeyStow.app for universal2
+        run: |
+          set -euo pipefail
+          venv/bin/pyinstaller --noconfirm --windowed --target-arch universal2 --name KeyStow \
+            --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app \
+            --add-data 'models/faster-whisper-base:models/faster-whisper-base' \
+            --add-data 'build-licenses:licenses' --add-data 'keystow/fonts:keystow/fonts' \
+            --paths installer/stubs --additional-hooks-dir installer/hooks \
+            --exclude-module PIL --exclude-module hf_xet \
+            --collect-all faster_whisper --collect-all ctranslate2 run_keystow.py
+      - name: Every native file must serve both architectures and macOS 14
+        run: venv/bin/python installer/audit_universal.py dist/KeyStow.app "$MAC_FLOOR" release-evidence
+      - name: Info.plist, then ad-hoc sign with no further bundle edits
+        run: |
+          set -euo pipefail
+          venv/bin/python - <<'PY'
+          import os, plistlib
+          path = 'dist/KeyStow.app/Contents/Info.plist'
+          info = plistlib.load(open(path, 'rb'))
+          info.update(CFBundleShortVersionString='0.0.0', CFBundleVersion='0.0.0',
+                      CFBundleIdentifier='com.keystow.app', LSMinimumSystemVersion=os.environ['MAC_FLOOR'],
+                      NSMicrophoneUsageDescription='KeyStow listens while you hold your shortcut and turns your speech into text on this Mac. Audio is not saved or sent anywhere.')
+          plistlib.dump(info, open(path, 'wb'))
+          PY
+          codesign --force --deep --sign - dist/KeyStow.app
+          codesign --verify --deep --strict --verbose=2 dist/KeyStow.app
+      - name: Packaged app recognises speech on Apple Silicon and under Rosetta
+        run: |
+          set -euo pipefail
+          venv/bin/python installer/verify_self_test.py dist/KeyStow.app/Contents/MacOS/KeyStow release-evidence/arm64
+          # The same check with the Intel slice of every binary (Rosetta 2).
+          cat > rosetta.sh <<'SH'
+          #!/bin/bash
+          exec arch -x86_64 "$(dirname "$0")/dist/KeyStow.app/Contents/MacOS/KeyStow" "$@"
+          SH
+          chmod +x rosetta.sh
+          venv/bin/python installer/verify_self_test.py ./rosetta.sh release-evidence/x86_64-rosetta
+      - name: Disk image with the first-launch guide
+        run: |
+          set -euo pipefail
+          mkdir -p dist/dmg
+          ditto dist/KeyStow.app dist/dmg/KeyStow.app
+          ln -s /Applications dist/dmg/Applications
+          cp "installer/mac/Open KeyStow the first time.txt" dist/dmg/
+          hdiutil create -volname KeyStow -srcfolder dist/dmg -ov -format UDZO dist/KeyStowMac.dmg
+          du -sh dist/KeyStow.app dist/KeyStowMac.dmg | tee release-evidence/sizes.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-universal-dmg
+          path: dist/KeyStowMac.dmg
+          retention-days: 14
+          if-no-files-found: error
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-universal-evidence
+          path: release-evidence/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  intel:
+    name: Run the universal app on a real Intel Mac
+    needs: universal
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mac-universal-dmg
+      - name: Mount the disk image as a buyer would get it
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          sw_vers | tee intel-evidence.txt
+          hdiutil attach -readonly -nobrowse -mountpoint /tmp/keystow KeyStowMac.dmg
+          test -f "/tmp/keystow/Open KeyStow the first time.txt"
+          ditto /tmp/keystow/KeyStow.app "$RUNNER_TEMP/KeyStow.app"
+          codesign --verify --deep --strict "$RUNNER_TEMP/KeyStow.app"
+      - name: Packaged app loads its model and recognises speech on Intel hardware
+        run: python3 installer/verify_self_test.py "$RUNNER_TEMP/KeyStow.app/Contents/MacOS/KeyStow" intel-evidence
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-intel-evidence
+          path: |
+            intel-evidence/
+            intel-evidence.txt
+          if-no-files-found: ignore

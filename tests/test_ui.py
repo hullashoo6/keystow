@@ -19,6 +19,10 @@ class UiStateTest(unittest.TestCase):
                  patch.object(ui.settings, "get", side_effect=lambda k,d=None:d), \\
                  patch.object(ui.settings, "set"):
                 window = ui.MainWindow()
+                # Building the window must not open any other top-level window
+                # (a stray one confused the packaged launch check).
+                stray = [w for w in QApplication.topLevelWidgets() if w.isVisible()]
+                assert stray == [], [type(w).__name__ for w in stray]
                 window.show()
                 for recording,busy in [(False, True),(True, False),(False, False)]:
                     window.set_state("state under test", recording=recording, busy=busy)

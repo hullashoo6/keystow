@@ -296,8 +296,8 @@ class MainWindow(QMainWindow):
                 "Local storage could not be opened at startup. Settings and word counts "
                 "may not be saved. Check your .keystow folder, then restart KeyStow."
             )
-        self.storage_warning.setVisible(bool(self.storage_warning.text()))
         status_box.addWidget(self.storage_warning)
+        self.storage_warning.setVisible(bool(self.storage_warning.text()))
         if sys.platform == "darwin":
             # macOS gives no global keys, paste or microphone audio to an app
             # until the user allows it, and shows no error when it is blocked.
@@ -347,8 +347,10 @@ class MainWindow(QMainWindow):
         got_row.addStretch()
         got_row.addWidget(got_it)
         welcome_box.addLayout(got_row)
-        self.welcome.setVisible(not settings.get("welcome_done"))
+        # Add to the layout before changing visibility: showing a widget that
+        # has no parent yet makes Qt open it as a separate, short-lived window.
         layout.addWidget(self.welcome)
+        self.welcome.setVisible(not settings.get("welcome_done"))
 
         # Latest result, kept in memory only, with Copy for recovery.
         result_panel = QFrame()

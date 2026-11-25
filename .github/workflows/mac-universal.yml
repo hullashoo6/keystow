@@ -80,6 +80,7 @@ jobs:
       - name: Build KeyStow.app for universal2
         run: |
           set -euo pipefail
+          export PYTHONPATH="$PWD/installer/stubs"  # the PyAV stand-in, also for PyInstaller's isolated imports
           venv/bin/pyinstaller --noconfirm --windowed --target-arch universal2 --name KeyStow \
             --icon installer/keystow.icns --osx-bundle-identifier com.keystow.app \
             --add-data 'models/faster-whisper-base:models/faster-whisper-base' \

@@ -15,13 +15,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish, for example 1.0.7 (must match keystow/__init__.py)
+        description: Version to publish as a pre-release, for example 1.0.7 (must match keystow/__init__.py)
         required: true
         type: string
-      prerelease:
-        description: Publish as a pre-release for testing; the website keeps serving the previous release
-        type: boolean
-        default: true
+      # There is deliberately no way to publish straight to "latest": every
+      # version is tried on real computers first, then promoted.
   pull_request:
     paths-ignore:
       - 'docs/**'
@@ -307,7 +305,6 @@ jobs:
       - name: Upload as a draft, compare what GitHub stored, then publish
         env:
           VERSION: ${{ needs.check.outputs.version }}
-          PRERELEASE: ${{ inputs.prerelease }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
@@ -333,12 +330,10 @@ jobs:
           gh release create "$tag" --draft --target "$GITHUB_SHA" --title "KeyStow $tag" --notes-file notes.md installers/KeyStowSetup.exe installers/KeyStowMac.dmg
           gh api "repos/$GH_REPO/releases?per_page=30" > releases.json
           python3 installer/verify_release_assets.py releases.json installers "$tag"
-          if [ "$PRERELEASE" = true ]; then
-            gh release edit "$tag" --draft=false --prerelease
-            echo "Published $tag as a pre-release from $GITHUB_SHA. The website still serves the previous release. Try both installers on real computers, then run the Promote a tested pre-release workflow." | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            gh release edit "$tag" --draft=false --prerelease=false --latest
-            echo "Published $tag from $GITHUB_SHA as the latest release" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
+          # Always a pre-release: "latest" (what the website serves) is set only
+          # by the promote workflow, after the installers were tried by hand.
+          gh release edit "$tag" --draft=false --prerelease --latest=false
+          test "$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq .prerelease)" = true
+          echo "Published $tag as a pre-release from $GITHUB_SHA. The website still serves the previous release. Try both installers on real computers, then run the Promote a tested pre-release workflow." | tee -a "$GITHUB_STEP_SUMMARY"
           published=1
           test "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"

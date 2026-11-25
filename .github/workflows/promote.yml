@@ -3,11 +3,30 @@ name: Promote a tested pre-release
 # Run this after a pre-release has been installed and tried on real computers.
 # It makes that release the one the website's download buttons serve. No file
 # changes: the installers that were tested are the installers that ship.
+#
+# It refuses unless: both installers were tried by hand (said below), GitHub's
+# stored SHA-256 of each file still equals the one recorded when it was built,
+# and the version is newer than the release the website serves now. If any
+# check fails, the current latest release stays exactly as it is.
 on:
   workflow_dispatch:
     inputs:
       version:
         description: Version to promote, for example 1.0.7
+        required: true
+        type: string
+      windows_tested:
+        description: I installed this Windows installer on a real PC and dictated into another app
+        required: true
+        type: boolean
+        default: false
+      mac_tested:
+        description: I installed this Mac disk image on a real Mac and dictated into another app
+        required: true
+        type: boolean
+        default: false
+      tested_on:
+        description: What was tried, for the release notes (e.g. "Windows 11 x64; MacBook Air M2, macOS 15")
         required: true
         type: string
 
@@ -27,21 +46,45 @@ jobs:
       - name: Check the pre-release and promote it
         env:
           VERSION: ${{ inputs.version }}
+          WINDOWS_TESTED: ${{ inputs.windows_tested }}
+          MAC_TESTED: ${{ inputs.mac_tested }}
+          TESTED_ON: ${{ inputs.tested_on }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 1.0.7"; exit 1; }
+          [ "$WINDOWS_TESTED" = true ] && [ "$MAC_TESTED" = true ] || {
+            echo "Both installers must be tried on real computers before promotion."; exit 1; }
+          [ -n "${TESTED_ON// /}" ] || { echo "Say what was tried (tested_on)."; exit 1; }
           tag="v$VERSION"
           gh api "repos/$GH_REPO/releases/tags/$tag" > release.json
+          gh api "repos/$GH_REPO/releases/latest" > latest.json || echo '{}' > latest.json
           python3 - <<'PY'
-          import json
+          import json, os, re
           release = json.load(open('release.json'))
+          latest = json.load(open('latest.json'))
           assert release['draft'] is False, 'this release is still a draft'
           assert release['prerelease'] is True, 'this release is not a pre-release, so there is nothing to promote'
-          names = {asset['name'] for asset in release['assets'] if asset.get('state') == 'uploaded'}
-          assert names == {'KeyStowSetup.exe', 'KeyStowMac.dmg'}, sorted(names)
+          assets = {a['name']: a for a in release['assets'] if a.get('state') == 'uploaded'}
+          assert set(assets) == {'KeyStowSetup.exe', 'KeyStowMac.dmg'}, sorted(assets)
+          # The notes carry the SHA-256 recorded at build time; GitHub's digest must still match.
+          body = release.get('body') or ''
+          for name, asset in assets.items():
+              recorded = re.search(r'\b([0-9a-f]{64})\s+' + re.escape(name), body)
+              assert recorded, f'no SHA-256 recorded for {name} in the release notes'
+              stored = (asset.get('digest') or '').removeprefix('sha256:')
+              assert stored == recorded.group(1), f'{name} changed since it was built'
+          def version(tag):
+              return tuple(int(p) for p in tag.lstrip('v').split('.'))
+          if latest.get('tag_name'):
+              assert version(release['tag_name']) > version(latest['tag_name']), \
+                  f"{release['tag_name']} is not newer than {latest['tag_name']}"
+          print('checks passed')
           PY
-          gh release edit "$tag" --prerelease=false --latest
+          note="$(printf '\n\nTried by hand before promotion: %s' "$TESTED_ON")"
+          gh release view "$tag" --json body --jq .body > notes.md
+          printf '%s\n' "$note" >> notes.md
+          gh release edit "$tag" --notes-file notes.md --prerelease=false --latest
           test "$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)" = "$tag"
-          echo "The website's download buttons now serve $tag" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "The website's download buttons now serve $tag (tried on: $TESTED_ON)" | tee -a "$GITHUB_STEP_SUMMARY"

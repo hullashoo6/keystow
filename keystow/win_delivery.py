@@ -101,7 +101,10 @@ class _POWER_THROTTLING_STATE(ctypes.Structure):
     _fields_ = [("Version", wt.ULONG), ("ControlMask", wt.ULONG), ("StateMask", wt.ULONG)]
 
 
-_WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+# WINFUNCTYPE exists only on Windows; elsewhere this module is imported only
+# by its tests, which never create a real window.
+_FUNCTYPE = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
+_WNDPROC = _FUNCTYPE(ctypes.c_ssize_t, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
 
 
 class _WNDCLASSW(ctypes.Structure):

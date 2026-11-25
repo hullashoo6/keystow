@@ -95,6 +95,20 @@ QPushButton#record:disabled {{
     background-color: #44445a;
     color: {MUTED};
 }}
+QPushButton#copy {{
+    background-color: transparent;
+    color: {TEXT};
+    border: 1px solid #3A3A4E;
+    border-radius: 8px;
+    padding: 6px 16px;
+}}
+QPushButton#copy:hover, QPushButton#copy:focus {{
+    border-color: {ACCENT};
+}}
+QPushButton#copy:disabled {{
+    color: {MUTED};
+    border-color: #343447;
+}}
 QComboBox {{
     background-color: {CARD};
     border: 1px solid #3A3A4E;
@@ -211,6 +225,7 @@ class MainWindow(QMainWindow):
     record_toggled = Signal()
     hotkey_selected = Signal(str)
     hotkey_capture_requested = Signal()
+    copy_requested = Signal()
     _sig_state = Signal(str, bool, bool)
     _sig_transcript = Signal(str)
     _sig_stats = Signal()
@@ -223,7 +238,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("KeyStow")
         self.setWindowIcon(tray_icons.icon("app", fallback=lambda: _tray_icon(ACCENT)))
         self.setMinimumWidth(360)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        # Not always-on-top: KeyStow should never sit over, or take focus
+        # from, the app the user is dictating into.
 
         self._toggle = settings.toggle_mode()
         self._hotkey_name = settings.get("hotkey", config.HOTKEY)
@@ -292,11 +308,25 @@ class MainWindow(QMainWindow):
             mac_note.setWordWrap(True)
             layout.addWidget(mac_note)
 
-        self.transcript = QLabel("Your words will appear here - and type themselves where your cursor is.")
+        self.transcript = QLabel("Your latest dictation appears here. KeyStow pastes it where your cursor is.")
         self.transcript.setObjectName("transcript")
         self.transcript.setWordWrap(True)
         self.transcript.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.transcript.setAccessibleName("Latest dictation")
         layout.addWidget(self.transcript)
+
+        # Recovery: the latest dictation stays in memory (never on disk) so it
+        # can be copied when KeyStow could not or would not paste it.
+        self.copy_btn = QPushButton("Copy")
+        self.copy_btn.setObjectName("copy")
+        self.copy_btn.setEnabled(False)
+        self.copy_btn.setAccessibleName("Copy latest dictation")
+        self.copy_btn.setToolTip("Put your latest dictation on the clipboard to paste it yourself.")
+        self.copy_btn.clicked.connect(lambda _checked=False: self.copy_requested.emit())
+        copy_row = QHBoxLayout()
+        copy_row.addStretch()
+        copy_row.addWidget(self.copy_btn)
+        layout.addLayout(copy_row)
 
         self.stats_label = QLabel()
         self.stats_label.setWordWrap(True)
@@ -368,6 +398,10 @@ class MainWindow(QMainWindow):
         open_action = QAction("Open KeyStow", self)
         open_action.triggered.connect(self.show_and_raise)
         menu.addAction(open_action)
+        self.copy_action = QAction("Copy last dictation", self)
+        self.copy_action.setEnabled(False)
+        self.copy_action.triggered.connect(lambda _checked=False: self.copy_requested.emit())
+        menu.addAction(self.copy_action)
 
         hotkey_menu = menu.addMenu("Activation key")
         group = QActionGroup(self)
@@ -544,11 +578,28 @@ class MainWindow(QMainWindow):
         self.tray.setIcon(self._icon_listening if recording else self._icon_idle)
         self.tray.setToolTip(f"KeyStow - {'listening...' if recording else text}")
 
+    # Approximate download sizes of the optional faster-whisper models.
+    MODEL_DOWNLOAD_SIZES = {"tiny": "75 MB", "small": "480 MB", "medium": "1.5 GB",
+                            "large-v3": "3 GB", "turbo": "1.6 GB"}
+
+    def confirm_download(self, model_size: str) -> bool:
+        """Ask before KeyStow downloads a model. Runs on the Qt thread."""
+        size = self.MODEL_DOWNLOAD_SIZES.get(model_size, "a large file")
+        answer = QMessageBox.question(
+            self, "Download a speech model?",
+            f"The '{model_size}' model is not on this computer yet. KeyStow will download it "
+            f"once from Hugging Face (about {size}).\n\nYour voice is still processed only on "
+            "this computer; the download is just the model file. Download now?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        return answer == QMessageBox.Yes
+
     def show_transcript(self, text: str):
         self._sig_transcript.emit(text)
 
     def _do_show_transcript(self, text: str):
         self.transcript.setText(text)
+        self.copy_btn.setEnabled(bool(text))
+        self.copy_action.setEnabled(bool(text))
 
     def refresh_stats(self):
         self._sig_stats.emit()

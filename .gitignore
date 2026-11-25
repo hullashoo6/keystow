@@ -24,3 +24,5 @@ dist/
 *.spec
 installer/installer/
 release-evidence/
+
+bench/

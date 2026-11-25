@@ -7,9 +7,10 @@ name: Mac installer (universal - Intel and Apple Silicon)
 # Built on GitHub's Intel Mac machines: the free Apple Silicon pool regularly
 # runs out of capacity and drops jobs after 15 minutes, which stopped releases
 # before. Building a universal app works on either kind of Mac, and the Intel
-# machine runs the packaged app's speech check natively. A second job repeats
-# the check on Apple Silicon when a machine is free; it cannot block a
-# release, because a person tries the installer on a real Mac before promotion.
+# machine runs the packaged app's speech check natively. Run this workflow by
+# hand to repeat the check on Apple Silicon when GitHub has a machine free; it
+# is never part of a release, where a person tries the installer on a real Mac
+# before promotion.
 #
 # How: download the Apple Silicon and the Intel build of every pinned package,
 # merge each pair into one universal wheel, install those into python.org's
@@ -22,6 +23,11 @@ on:
         type: string
         default: '0.0.0'
   workflow_dispatch:
+    inputs:
+      check_apple_silicon:
+        description: Also run the packaged app on an Apple Silicon machine (if GitHub has one free)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -175,9 +181,12 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  # Only when run by hand: a job GitHub drops for lack of Apple Silicon
+  # machines counts as cancelled, which would skip a release's publish step.
   apple-silicon:
-    name: Same check on Apple Silicon (when a machine is free; not a gate)
+    name: Same check on Apple Silicon (run by hand)
     needs: universal
+    if: github.event_name == 'workflow_dispatch' && inputs.check_apple_silicon
     runs-on: macos-15
     continue-on-error: true
     timeout-minutes: 30

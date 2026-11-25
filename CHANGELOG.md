@@ -4,7 +4,34 @@ Every version of KeyStow, newest first. This file is where release notes are wri
 
 Do not use the Mac installers of v1.0.0 to v1.0.5: they could not get microphone access.
 
+## v1.0.8
+
+KeyStow v1.0.8 stops older text from being pasted, answers faster, opens on macOS 14 and 15 again, and has a new look that matches the website. It includes everything from the v1.0.7 pre-release, plus a lasting identity for the Mac app.
+
+- Mac: the app is now signed with KeyStow's own certificate instead of a one-off signature, so it keeps the same identity from one version to the next. After you allow Accessibility again for this update, macOS can keep that permission when you install later KeyStow updates. The app is still not notarized by Apple, so the one-time confirmation on first open remains.
+- Windows: no more stale pastes. KeyStow now learns when the app you are dictating into actually reads the text, and only then puts your previous clipboard back (pictures, files and formatted text included). If the app has not read it in time, your dictation stays on the clipboard, so a late paste still gets the right words. An older dictation is never put back, and anything you copy in the meantime is never overwritten.
+- Windows: KeyStow pastes only into the window that was in front when you let go of the key. If you switched windows, if KeyStow itself is in front, or if the window runs as administrator, it does not paste and says why. Use the new Copy button (also in the tray menu) to paste the text yourself. Each recording is pasted at most once.
+- Windows: dictated text is kept out of Windows clipboard history and Cloud Clipboard.
+- Faster: noise suppression now runs while you speak instead of after you let go. On a 2-core laptop, the wait after a 5-second sentence went from about 1.6 to 1.0 seconds, and after a 14-second one from about 3.1 to 1.4 seconds. KeyStow also asks Windows not to slow it down while it is minimised.
+- If the system misses the release of your shortcut key, KeyStow notices within a fraction of a second and stops listening, instead of joining two dictations together.
+- New look: the window, tray icons and installers now match the website: the KeyStow logo, Instrument Sans and a light design. The status says in words what is happening (Ready, Listening, Pasted, Not pasted).
+- Choose "Press to start, press to stop" if holding a key is hard. The window has keyboard focus rings and screen-reader names, and a short "Try it now" guide on first start.
+- KeyStow never downloads a speech model without asking: choosing a larger model shows its size and waits for your OK. If the built-in model is missing or damaged, KeyStow says to reinstall instead of downloading it.
+- Smaller: the Windows app takes about 385 MB instead of about 534 MB. Video libraries the app never used (FFmpeg, including the x264 and x265 encoders) and unused parts of Qt are gone.
+- Updating on Windows: the installer closes a running KeyStow for you.
+- Mac: works on macOS 14 and 15 again. v1.0.6 included Qt libraries built for macOS 26, so on earlier macOS versions it may not have opened at all. Every library in v1.0.7 is checked to need no more than macOS 14.
+- Mac: fixes KeyStow closing at start-up or on the first dictation. It reads the keyboard layout once on the main thread, as macOS requires. If that is not possible, KeyStow starts without the shortcut and says so, instead of closing.
+- Mac: at start, KeyStow asks macOS for Accessibility access, so macOS shows its own prompt with a button to the right setting. If access is still missing when your text is ready, the text is left on the clipboard and the window says so.
+- Mac: KeyStow needs macOS 14 or later; on an older macOS the system now says so. The Mac app is now one universal app built for both Apple Silicon and Intel. Apple Silicon is the supported Mac; on Intel Macs it passes its speech check on GitHub's build machines but has not yet been tried by hand. The disk image includes "Open KeyStow the first time", with the one-time steps.
+- The diagnostic log no longer gets a line for every dictation and can now roll over on Windows. Both installers include the licences of the third-party software inside them.
+
+Quit KeyStow before installing the update on a Mac. On a Mac, after replacing the app, remove KeyStow from System Settings > Privacy & Security > Accessibility and add it again; this should be the last update that needs it. KeyStow understands English. The Windows x64 and Mac installers include the base model. The Windows installer is unsigned; the Mac app is not notarized by Apple.
+
+Checks on this build: component tests passed on Windows and on an Intel Mac; KeyStow's clipboard handling passed its round-trip checks on a real Windows clipboard on a test machine; the packaged app on both loaded its own speech model and transcribed a recorded speech sample, and every native file in the Mac app was checked for both Apple Silicon and Intel and for macOS 14. The same code as v1.0.7 was tried by hand, dictating into other apps, on a Windows 11 laptop and a MacBook Air.
+
 ## v1.0.7
+
+Pre-release only, replaced by v1.0.8 before it reached the website.
 
 KeyStow v1.0.7 stops older text from being pasted, answers faster, and has a new look that matches the website.
 

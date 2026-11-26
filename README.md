@@ -9,19 +9,19 @@ Speak instead of typing. Put your cursor in a text field, hold a key, speak, and
 
 ## What it runs on
 
-- **Windows:** 64-bit (x64). The installed app takes about 560 MB.
-- **Mac:** Apple Silicon with macOS 14 or later. Intel Macs are not supported.
+- **Windows:** 64-bit (x64), Windows 10 or 11. The installed app takes about 385 MB; the installer download is about 195 MB.
+- **Mac:** macOS 14 or later. The app is one universal build for Apple Silicon and Intel; Apple Silicon is the supported Mac, and on Intel it passes its automated speech check but has not been tried by hand. The installed app takes about 536 MB; the download is about 267 MB.
 
 ## Using it
 
 - **Shortcut.** Hold the key while you speak and release it to paste. The default is Right Ctrl on Windows and Right Option on a Mac. Choose another key in the window or from the tray icon.
-- **Where the text goes.** KeyStow pastes into whichever app is focused when the text is ready, so keep the cursor where you want it. Some secure or elevated fields refuse pasted text.
+- **Where the text goes.** On Windows, KeyStow pastes only into the window that was in front when you released the key. If you switched windows, if KeyStow itself is in front, or if the window runs as administrator, it does not paste and says why; use the Copy button to paste the text yourself. On a Mac, KeyStow pastes into the app in front when the text is ready, so keep the cursor where you want it. Some secure or elevated fields refuse pasted text.
 - **Closing the window quits KeyStow.** Minimise it to keep dictation available. To leave, close the window or choose Quit KeyStow from the tray icon.
 - **Start at sign-in** is on by default: a ticked option in the Windows installer, and switched on once at first run on a Mac. Started that way, KeyStow opens minimised. Switch it off from the tray icon.
 - **Language.** KeyStow transcribes English.
 - **Models.** The base model ships inside the app and needs no download. Larger models download once, the first time you pick them.
 
-Transcription can be wrong, so read text before you send it. KeyStow puts the text on the clipboard to paste it and then restores the text that was there before; images and files on the clipboard are not preserved.
+Transcription can be wrong, so read text before you send it. KeyStow puts the text on the clipboard to paste it. On Windows, your previous clipboard contents (pictures, files and formatted text included) are put back once the app you dictated into has read the text; if it has not read it in time, your dictation stays on the clipboard instead. On a Mac, the previous text is restored on a timer, and earlier images or files are not preserved.
 
 ## First start on a Mac
 
@@ -34,7 +34,7 @@ KeyStow then needs two permissions under Privacy & Security:
 
 If Accessibility is missing when your text is ready, KeyStow leaves the text on the clipboard and says so. Depending on the macOS version, the system may also list KeyStow under Input Monitoring; Accessibility is the one it needs.
 
-**After every update on a Mac**, remove KeyStow from the Accessibility list with the minus button and add it again. The app is not signed with an Apple developer identity, so macOS treats each update as a new app and the old entry stops working even though it still looks switched on.
+**When you update to v1.0.8 on a Mac**, remove KeyStow from the Accessibility list with the minus button and add it again once. From v1.0.8 the app is signed with KeyStow's own certificate, so it keeps the same identity from one version to the next and macOS can keep the permission across later updates. The app is still not notarized by Apple, so the one-time confirmation on first open remains.
 
 ## Removing it
 
@@ -53,23 +53,23 @@ Dictated text passes through the system clipboard on its way to the cursor. If y
 
 ## Licences of what is inside
 
-The installers contain third-party software under its own licences, including Qt and pynput (LGPL) and FFmpeg libraries (GPL). From v1.0.7 the notices and licence texts ship with the app: the `licenses` folder next to `KeyStow.exe` on Windows, and `Contents/Resources/licenses` inside the app on a Mac. `installer/collect_licenses.py` gathers them at build time and `installer/third-party-notes.txt` says where each part's source is.
+The installers contain third-party software under its own licences, including Qt and pynput (LGPL). v1.0.6 and earlier also bundled FFmpeg libraries (LGPL); they are gone from v1.0.7 onwards. From v1.0.7 the notices and licence texts ship with the app: the `licenses` folder next to `KeyStow.exe` on Windows, and `Contents/Resources/licenses` inside the app on a Mac. `installer/collect_licenses.py` gathers them at build time and `installer/third-party-notes.txt` says where each part's source is.
 
 ## What each release is checked for
 
 The release workflow builds both installers and publishes only if all of this passes:
 
-- the component tests, on Windows and on an Apple Silicon Mac;
+- the component tests, on Windows and on an Intel Mac (the Apple Silicon check runs by hand, outside the release workflow);
 - the packaged app itself loading the speech model it ships with and transcribing a recorded speech sample, on both;
 - the packaged Windows app opening its window, refusing a second copy and closing cleanly;
 - the Mac app's signature, checked again inside the finished disk image;
 - the uploaded files matching the built files byte for byte.
 
-These checks do not use a real microphone, the global shortcut or another app to paste into. Only a person at a real computer can check those, which is why a new version is published as a pre-release first; each version's notes in the changelog say what had and had not been tried by hand. The installers are not code-signed, so Windows and macOS show a warning the first time.
+These checks do not use a real microphone, the global shortcut or another app to paste into. Only a person at a real computer can check those, which is why a new version is published as a pre-release first; each version's notes in the changelog say what had and had not been tried by hand. The Windows installer is unsigned, so Windows may show a SmartScreen prompt the first time. The Mac app is signed with KeyStow's own certificate but not notarized by Apple, so macOS asks you to confirm the first open.
 
 ## Run from source
 
-1. Install Python 3.10 or later.
+1. Install Python 3.11, the version releases are built and tested with (3.10 or later may work).
 2. Clone this repository.
 3. On Windows run `install_windows.bat`, then `run_windows.bat`. Elsewhere, create a virtual environment, `pip install -r requirements.txt`, and run `python -m keystow`.
 

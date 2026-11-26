@@ -5,7 +5,9 @@
 .blog{padding:48px 0 96px;max-width:840px;margin-inline:auto}
 .blog-title{font-size:clamp(38px,4.8vw,64px);max-width:15em}
 .blog .lede{margin-bottom:0}
-.post-list{margin:44px 0 0;border-top:1px solid var(--line)}
+.post-list{margin:14px 0 44px;border-top:1px solid var(--line)}
+.post-group-title{font-weight:500;font-size:22px;letter-spacing:-.02em;margin:44px 0 0;color:var(--ink)}
+.post-groups .post-group-title:first-child{margin-top:44px}
 .post-row{display:block;padding:28px 0;border-bottom:1px solid var(--line);text-decoration:none}
 .post-row:hover .post-title{color:var(--violet)}
 .post-title{font-weight:500;font-size:28px;line-height:1.15;letter-spacing:-.03em;margin:0 0 6px;color:var(--ink);transition:color .18s}

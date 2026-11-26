@@ -18,8 +18,8 @@
 <link rel="icon" type="image/png" href="../../assets/favicon.png">
 <link rel="icon" type="image/svg+xml" href="../../assets/logo.svg">
 <link rel="preload" href="../../assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../assets/site.css?v=4">
-<link rel="stylesheet" href="../../assets/blog.css?v=3">
+<link rel="stylesheet" href="../../assets/site.css?v=5">
+<link rel="stylesheet" href="../../assets/blog.css?v=4">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"How Much Disk Space and RAM Does Offline Dictation Need?","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"publisher":{"@type":"Organization","name":"KeyStow","url":"https://hullashoo6.github.io/keystow/"},"mainEntityOfPage":"https://hullashoo6.github.io/keystow/blog/offline-dictation-system-requirements/","image":"https://hullashoo6.github.io/keystow/assets/og.png","description":"Offline dictation carries its speech model on your machine. What that means for disk space and memory, with real numbers from a working app.","inLanguage":"en"}</script>
 </head>
 <body>
@@ -29,7 +29,7 @@
 <nav class="nav" aria-label="Site">
 <a class="nav-link" href="../../#how">How it works</a>
 <a class="nav-link" href="../../#why">Why KeyStow</a>
-<a class="nav-link" href="../">Blog</a>
+<a class="nav-link nav-link--keep" href="../">Blog</a>
 <a class="btn-quiet" href="https://checkout.dodopayments.com/buy/pdt_0NsLl0cF4YBUyExTYj3m1?quantity=1&amp;minimalAddress=true&amp;redirect_url=https%3A%2F%2Fhullashoo6.github.io%2Fkeystow%2Fdownload%2F">Buy, $5</a>
 </nav>
 </header>
@@ -44,13 +44,13 @@
 <h2>The trade that offline makes</h2>
 <p>Cloud dictation borrows someone else&#x27;s computer, so the app itself is tiny. Offline dictation brings the speech model home, and models take space. The question is how much, and whether an ordinary laptop notices.</p>
 <h2>Disk space: the model is most of it</h2>
-<p>A small speech model runs to a few hundred megabytes; larger, more accurate models run higher. The app around it is minor by comparison. KeyStow is a useful worked example: the full install, with the default speech model bundled in, takes about 560 MB. That is roughly a short video&#x27;s worth of disk, once, instead of a per-month subscription fee.</p>
+<p>A small speech model runs to a few hundred megabytes; larger, more accurate models run higher. The app around it is minor by comparison. KeyStow is a useful worked example: with the default speech model bundled in, the installed app takes about 385 MB on Windows and about 536 MB on Mac (measured on v1.0.8; the downloads themselves are about 195 MB and 267 MB). That is roughly a short video&#x27;s worth of disk, once, instead of a per-month subscription fee.</p>
 <h2>Memory: it matters while you dictate</h2>
 <p>While you hold the key, the model is loaded and working. Smaller models need less memory and answer faster; larger models need more of both. For everyday dictation on a machine that already runs a browser with a dozen tabs, the default model is not the thing that will slow you down. Close the twenty-tab browser session before blaming the dictation app.</p>
 <h2>Practical guidance</h2>
 <ul><li><strong>Check the stated install size before downloading</strong>, especially on a nearly full drive.</li><li><strong>Start with the default model.</strong> Step up to a larger one only if you hear accuracy problems the small one makes.</li><li><strong>Updates replace, not pile up.</strong> A well-built installer swaps the old version rather than adding beside it, so the footprint stays flat over time.</li></ul>
 <h2>How KeyStow fits</h2>
-<p>KeyStow is an offline voice dictation app for Windows and Apple Silicon Mac. The install is about 560 MB with the default model bundled, so dictation works from first launch with no download, and larger models are available as options. Hold Right Ctrl on Windows (Right Option on a Mac), speak, release, and text is pasted where the cursor is. Your voice is processed privately on your own computer and never sent to the cloud, and dictation works without internet too. KeyStow does not keep an audio recording or transcript history. It costs $5 once, with no subscription and no account, and the source code is open under the MIT license.</p>
+<p>KeyStow is an offline voice dictation app for Windows and Apple Silicon Mac. The install is about 385 MB on Windows and about 536 MB on Mac with the default model bundled, so dictation works from first launch with no download, and larger models are available as options. Hold Right Ctrl on Windows (Right Option on a Mac), speak, release, and text is pasted where the cursor is. Your voice is processed privately on your own computer and never sent to the cloud, and dictation works without internet too. KeyStow does not keep an audio recording or transcript history. It costs $5 once, with no subscription and no account, and the source code is open under the MIT license.</p>
 
 <div class="article-cta">
 <p>KeyStow: offline voice dictation for Windows and Apple Silicon Mac. $5 once, lifetime access.</p>

@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" href="../assets/favicon.png">
 <link rel="icon" type="image/svg+xml" href="../assets/logo.svg">
 <link rel="preload" href="../assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../assets/site.css?v=4">
+<link rel="stylesheet" href="../assets/site.css?v=5">
 </head>
 <body>
 <div class="wrap">
@@ -19,11 +19,11 @@
 <p class="kicker" id="state-eyebrow">Your KeyStow downloads</p>
 <h1 class="display dl-title" id="state-title">Download KeyStow</h1>
 <p class="lede" id="state-sub">Your purchase includes both installers. Download the one for your computer. The same links are also in your Dodo purchase email and customer portal.</p>
-<div class="warn" id="warn">Your payment did not complete, so no download is linked to this visit. If you already paid, use the download links in your Dodo purchase email or customer portal.</div>
+<div class="warn" id="warn">No completed payment is linked to this visit. If you already bought KeyStow, your download links are in your Dodo purchase email and customer portal. If you have not bought it yet, see <a href="../">the KeyStow homepage</a>.</div>
 <div id="downloads">
 <div class="dl-list">
-<div class="dl-row"><div><h2 class="dl-name">Windows</h2><p class="dl-meta">Installer (.exe), about 195 MB. 64-bit Windows 10 or 11.</p></div><a class="btn" href="https://github.com/hullashoo6/keystow/releases/latest/download/KeyStowSetup.exe">Download for Windows</a></div>
-<div class="dl-row"><div><h2 class="dl-name">Mac (Apple Silicon)</h2><p class="dl-meta">Installer (.dmg), about 267 MB. macOS 14 or later.</p></div><a class="btn" href="https://github.com/hullashoo6/keystow/releases/latest/download/KeyStowMac.dmg">Download for Mac</a></div>
+<div class="dl-row"><div><h2 class="dl-name">Windows</h2><p class="dl-meta">Installer (.exe), about 195 MB. 64-bit Windows 10 or 11. Version 1.0.8; the installer is unsigned, so Windows may ask you to confirm it.</p></div><a class="btn" href="https://github.com/hullashoo6/keystow/releases/latest/download/KeyStowSetup.exe">Download for Windows</a></div>
+<div class="dl-row"><div><h2 class="dl-name">Mac (Apple Silicon)</h2><p class="dl-meta">Installer (.dmg), about 267 MB. macOS 14 or later. Version 1.0.8; self-signed and not notarized by Apple, so macOS asks you to confirm the first open.</p></div><a class="btn" href="https://github.com/hullashoo6/keystow/releases/latest/download/KeyStowMac.dmg">Download for Mac</a></div>
 </div>
 <div class="notes">
 <div class="note"><h3 class="note-title">Updating?</h3><p class="note-body">On Windows, just run the new installer: it closes KeyStow for you. On a Mac, quit KeyStow first, then replace the app in Applications.</p></div>
@@ -31,7 +31,7 @@
 <div class="note"><h3 class="note-title">On Mac</h3><p class="note-body">Open the disk image and drag KeyStow into Applications. macOS asks you to confirm KeyStow once, the first time: the disk image includes <strong>Open KeyStow the first time</strong> with the steps. Then allow the microphone and Accessibility when KeyStow asks.</p></div>
 </div>
 </div>
-<p class="help-line">Need help? Email <a href="mailto:hullashoo6@gmail.com">hullashoo6@gmail.com</a>.</p>
+<p class="help-line">Verify your download: the SHA-256 hashes are in the <a href="https://github.com/hullashoo6/keystow/releases/latest">release notes</a>. Need help? Email <a href="mailto:hullashoo6@gmail.com">hullashoo6@gmail.com</a>.</p>
 <a class="back" href="../">Back to the KeyStow homepage</a>
 </main>
 </div>
@@ -57,8 +57,8 @@ if(paid){
 }else{
   document.getElementById('downloads').style.display='none';
   document.getElementById('warn').style.display='block';
-  document.getElementById('state-title').textContent='Payment not completed';
-  document.getElementById('state-sub').textContent='';
+  document.getElementById('state-title').textContent='Get your KeyStow downloads';
+  document.getElementById('state-sub').textContent='This page links your downloads after a completed payment. Returning buyers can also use their Dodo purchase email or customer portal.';
 }
 }catch(e){}
 </script>

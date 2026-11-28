@@ -1,0 +1,57 @@
+/* KeyStow blog styles, loaded after site.css on blog pages only.
+   Reuses the site's variables, header, footer and buttons. */
+
+/* Blog index */
+.blog{padding:48px 0 96px;max-width:840px;margin-inline:auto}
+.blog-title{font-size:clamp(38px,4.8vw,64px);max-width:15em}
+.blog .lede{margin-bottom:0}
+.post-list{margin:14px 0 44px;border-top:1px solid var(--line)}
+.post-group-title{font-weight:500;font-size:22px;letter-spacing:-.02em;margin:44px 0 0;color:var(--ink)}
+.post-groups .post-group-title:first-child{margin-top:44px}
+.post-row{display:block;padding:28px 0;border-bottom:1px solid var(--line);text-decoration:none}
+.post-row:hover .post-title{color:var(--violet)}
+.post-title{font-weight:500;font-size:28px;line-height:1.15;letter-spacing:-.03em;margin:0 0 6px;color:var(--ink);transition:color .18s}
+.post-meta{margin:0 0 6px;font-size:14px;color:var(--slate)}
+.post-desc{margin:0;font-size:16.5px;color:var(--slate);max-width:44em}
+
+/* Article page */
+.article{padding:48px 0 96px;max-width:760px;margin-inline:auto}
+.article .kicker{margin-bottom:18px}
+.article-title{font-weight:500;font-size:clamp(34px,4.4vw,56px);line-height:1.06;letter-spacing:-.04em;margin:0 0 14px}
+.article-meta{margin:0 0 34px;font-size:14px;color:var(--slate)}
+.article-body h2{font-weight:500;font-size:clamp(25px,2.8vw,33px);line-height:1.12;letter-spacing:-.03em;margin:56px 0 14px}
+.article-body p{margin:0 0 20px;font-size:17.5px;line-height:1.7}
+.article-body ul{margin:0 0 20px;padding-left:22px}
+.article-body li{margin:0 0 10px;font-size:17.5px;line-height:1.6}
+.article-body a{color:var(--ink);text-underline-offset:3px}
+.article-body a:hover{color:var(--violet)}
+.article-body a.btn{color:#fff;text-decoration:none}
+.article-body a.btn:hover{color:#fff;background:#2b2b34}
+.article-table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:15px;line-height:1.45}
+.article-table th{text-align:left;font-weight:600;padding:10px 12px;border-bottom:2px solid var(--ink)}
+.article-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--slate)}
+.article-table-wrap{overflow-x:auto;margin:0 0 20px}
+.article-table-wrap .article-table{margin-bottom:0}
+.article-note{font-size:14.5px;color:var(--slate)}
+.article-cta{margin:56px 0 0;padding:40px 44px;background:var(--mist);border-radius:24px;text-align:center}
+.article-cta p{margin:0 0 20px;font-size:19px;font-weight:500;letter-spacing:-.02em}
+.article-sources{margin:56px 0 0;padding-top:28px;border-top:1px solid var(--line)}
+.article-sources h2{font-weight:600;font-size:17px;margin:0 0 12px}
+.article-sources ul{margin:0;padding-left:20px}
+.article-sources li{margin:0 0 8px;font-size:14.5px;color:var(--slate)}
+.article-sources a{color:var(--slate);text-underline-offset:3px;word-break:break-all}
+
+@media (max-width:720px){
+  .article-table-wrap{overflow-x:visible}
+  .article-table,.article-table tbody{display:block;width:100%}
+  .article-table thead{display:none}
+  .article-table tr{display:block;margin:0 0 16px;padding:6px 0;border:1px solid var(--line);border-radius:14px}
+  .article-table td{display:grid;grid-template-columns:108px minmax(0,1fr);gap:10px;padding:8px 14px;border-bottom:none;overflow-wrap:anywhere}
+  .article-table td::before{content:attr(data-label);font-weight:600;color:var(--ink)}
+}
+
+@media (max-width:560px){
+  .blog{padding:24px 0 72px}
+  .article{padding:24px 0 72px}
+  .article-cta{padding:32px 24px}
+}

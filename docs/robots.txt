@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://hullashoo6.github.io/keystow/sitemap.xml
+Sitemap: https://keystow.pages.dev/sitemap.xml

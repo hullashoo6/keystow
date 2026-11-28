@@ -2,7 +2,7 @@
 
 Speak instead of typing. Put your cursor in a text field, hold a key, speak, and release: KeyStow turns your speech into text on your own computer and pastes it where the cursor is.
 
-- **Website and purchase:** <https://hullashoo6.github.io/keystow/>. The ready-to-install app for Windows and Mac costs $5 once.
+- **Website and purchase:** <https://keystow.pages.dev/>. The ready-to-install app for Windows and Mac costs $5 once.
 - **Source:** the code in this repository is available under the [MIT license](LICENSE).
 - **Support:** hullashoo6@gmail.com
 - **What changed in each version:** [CHANGELOG.md](CHANGELOG.md)
